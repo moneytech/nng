@@ -11,8 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <nng/nng.h>
+#include <nng/supplemental/util/options.h>
+
 #include "core/nng_impl.h"
-#include "supplemental/util/options.h"
 
 // Call with optidx set to 1 to start parsing.
 int
@@ -23,12 +25,13 @@ nng_opts_parse(int argc, char *const *argv, const nng_optspec *opts, int *val,
 	int                matches;
 	bool               shortopt;
 	size_t             l;
-	char *             arg = argv[*optidx];
+	char *             arg;
 	int                i;
 
 	if ((i = *optidx) >= argc) {
 		return (-1);
 	}
+	arg = argv[*optidx];
 
 	if (arg[0] != '-') {
 		return (-1);

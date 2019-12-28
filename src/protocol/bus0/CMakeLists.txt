@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,11 +9,9 @@
 #
 
 #  Bus protocol
+option (NNG_PROTO_BUS0 "Enable BUSv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_BUS0)
 
-if (NNG_PROTO_BUS0)
-    set(BUS0_SOURCES protocol/bus0/bus.c protocol/bus0/bus.h)
-    set(BUS0_HEADERS protocol/bus0/bus.h)
-endif()
-
-set(NNG_SOURCES ${NNG_SOURCES} ${BUS0_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${BUS0_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_PROTO_BUS0 bus.c)
+nng_headers_if(NNG_PROTO_BUS0 nng/protocol/bus0/bus.h)
+nng_defines_if(NNG_PROTO_BUS0 NNG_HAVE_BUS0)

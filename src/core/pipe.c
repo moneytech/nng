@@ -1,6 +1,7 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
+// Copyright 2018 Devolutions <info@devolutions.net>
 //
 // This software is supplied under the terms of the MIT License, a
 // copy of which should be located in the distribution where this
@@ -179,35 +180,14 @@ nni_pipe_peer(nni_pipe *p)
 	return (p->p_tran_ops.p_peer(p->p_tran_data));
 }
 
-void
-nni_pipe_stats_init(nni_pipe *p)
-{
-#ifdef NNG_ENABLE_STATS
-	nni_pipe_stats *st = &p->p_stats;
-
-	if (p->p_listener != NULL) {
-		st->s_ep_id.si_name  = "listener";
-		st->s_ep_id.si_desc  = "listener for pipe";
-		st->s_ep_id.si_value = nni_listener_id(p->p_listener);
-	} else {
-		st->s_ep_id.si_name  = "dialer";
-		st->s_ep_id.si_desc  = "dialer for pipe";
-		st->s_ep_id.si_value = nni_dialer_id(p->p_dialer);
-	}
-
-	nni_stat_append(NULL, &st->s_root);
-#else
-	NNI_ARG_UNUSED(p);
-#endif
-}
-
-int
-nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
+static int
+pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 {
 	nni_pipe *          p;
 	int                 rv;
 	void *              sdata = nni_sock_proto_data(sock);
 	nni_proto_pipe_ops *pops  = nni_sock_proto_pipe_ops(sock);
+	nni_pipe_stats *    st;
 
 	if ((p = NNI_ALLOC_STRUCT(p)) == NULL) {
 		// In this case we just toss the pipe...
@@ -215,7 +195,6 @@ nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 		return (NNG_ENOMEM);
 	}
 
-	// Make a private copy of the transport ops.
 	p->p_tran_ops   = *tran->tran_pipe;
 	p->p_tran_data  = tdata;
 	p->p_proto_ops  = *pops;
@@ -224,6 +203,7 @@ nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 	p->p_closed     = false;
 	p->p_cbs        = false;
 	p->p_refcnt     = 0;
+	st              = &p->p_stats;
 
 	nni_atomic_flag_reset(&p->p_stop);
 	NNI_LIST_NODE_INIT(&p->p_sock_node);
@@ -238,7 +218,6 @@ nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 	}
 	nni_mtx_unlock(&nni_pipe_lk);
 
-	nni_pipe_stats *st = &p->p_stats;
 	snprintf(st->s_scope, sizeof(st->s_scope), "pipe%u", p->p_id);
 
 	nni_stat_init_scope(&st->s_root, st->s_scope, "pipe statistics");
@@ -246,15 +225,23 @@ nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 	nni_stat_init_id(&st->s_id, "id", "pipe id", p->p_id);
 	nni_stat_append(&st->s_root, &st->s_id);
 
-	// name and description fleshed out later.
-	nni_stat_init_id(&st->s_ep_id, "", "", 0);
-	nni_stat_append(&st->s_root, &st->s_ep_id);
-
 	nni_stat_init_id(&st->s_sock_id, "socket", "socket for pipe",
 	    nni_sock_id(p->p_sock));
 	nni_stat_append(&st->s_root, &st->s_sock_id);
+	nni_stat_init_atomic(&st->s_rxmsgs, "rxmsgs", "messages received");
+	nni_stat_set_unit(&st->s_rxmsgs, NNG_UNIT_MESSAGES);
+	nni_stat_append(&st->s_root, &st->s_rxmsgs);
+	nni_stat_init_atomic(&st->s_txmsgs, "txmsgs", "messages sent");
+	nni_stat_set_unit(&st->s_txmsgs, NNG_UNIT_MESSAGES);
+	nni_stat_append(&st->s_root, &st->s_txmsgs);
+	nni_stat_init_atomic(&st->s_rxbytes, "rxbytes", "bytes received");
+	nni_stat_set_unit(&st->s_rxbytes, NNG_UNIT_BYTES);
+	nni_stat_append(&st->s_root, &st->s_rxbytes);
+	nni_stat_init_atomic(&st->s_txbytes, "txbytes", "bytes sent");
+	nni_stat_set_unit(&st->s_txbytes, NNG_UNIT_BYTES);
+	nni_stat_append(&st->s_root, &st->s_txbytes);
 
-	if ((rv != 0) || ((rv = tran->tran_pipe->p_init(tdata, p)) != 0) ||
+	if ((rv != 0) || ((rv = p->p_tran_ops.p_init(tdata, p)) != 0) ||
 	    ((rv = pops->pipe_init(&p->p_proto_data, p, sdata)) != 0)) {
 		nni_pipe_close(p);
 		nni_pipe_rele(p);
@@ -266,16 +253,60 @@ nni_pipe_create(nni_pipe **pp, nni_sock *sock, nni_tran *tran, void *tdata)
 }
 
 int
+nni_pipe_create_dialer(nni_pipe **pp, nni_dialer *d, void *tdata)
+{
+	int            rv;
+	nni_tran *     tran = d->d_tran;
+	nni_pipe *     p;
+	nni_stat_item *st;
+#ifdef NNG_ENABLE_STATS
+	uint64_t id = nni_dialer_id(d);
+#endif
+
+	if ((rv = pipe_create(&p, d->d_sock, tran, tdata)) != 0) {
+		return (rv);
+	}
+	st          = &p->p_stats.s_ep_id;
+	p->p_dialer = d;
+	nni_stat_init_id(st, "dialer", "dialer for pipe", id);
+	nni_pipe_add_stat(p, st);
+	nni_stat_append(NULL, &p->p_stats.s_root);
+	*pp = p;
+	return (0);
+}
+
+int
+nni_pipe_create_listener(nni_pipe **pp, nni_listener *l, void *tdata)
+{
+	int            rv;
+	nni_tran *     tran = l->l_tran;
+	nni_pipe *     p;
+	nni_stat_item *st;
+#ifdef NNG_ENABLE_STATS
+	uint64_t id = nni_listener_id(l);
+#endif
+
+	if ((rv = pipe_create(&p, l->l_sock, tran, tdata)) != 0) {
+		return (rv);
+	}
+	st            = &p->p_stats.s_ep_id;
+	p->p_listener = l;
+	nni_stat_init_id(st, "listener", "listener for pipe", id);
+	nni_pipe_add_stat(p, st);
+	nni_stat_append(NULL, &p->p_stats.s_root);
+	*pp = p;
+	return (0);
+}
+
+int
 nni_pipe_getopt(
     nni_pipe *p, const char *name, void *val, size_t *szp, nni_opt_type t)
 {
-	nni_tran_option *o;
+	int rv;
 
-	for (o = p->p_tran_ops.p_options; o && o->o_name; o++) {
-		if (strcmp(o->o_name, name) != 0) {
-			continue;
-		}
-		return (o->o_get(p->p_tran_data, val, szp, t));
+	rv = p->p_tran_ops.p_getopt(p->p_tran_data, name, val, szp, t);
+	if (rv != NNG_ENOTSUP) {
+		return (rv);
 	}
 
 	// Maybe the endpoint knows? The guarantees on pipes ensure that the
@@ -317,4 +348,28 @@ void
 nni_pipe_add_stat(nni_pipe *p, nni_stat_item *item)
 {
 	nni_stat_append(&p->p_stats.s_root, item);
+}
+
+void
+nni_pipe_bump_rx(nni_pipe *p, size_t nbytes)
+{
+	nni_stat_inc_atomic(&p->p_stats.s_rxbytes, nbytes);
+	nni_stat_inc_atomic(&p->p_stats.s_rxmsgs, 1);
+}
+
+void
+nni_pipe_bump_tx(nni_pipe *p, size_t nbytes)
+{
+	nni_stat_inc_atomic(&p->p_stats.s_txbytes, nbytes);
+	nni_stat_inc_atomic(&p->p_stats.s_txmsgs, 1);
+}
+
+void
+nni_pipe_bump_error(nni_pipe *p, int err)
+{
+	if (p->p_dialer != NULL) {
+		nni_dialer_bump_error(p->p_dialer, err);
+	} else {
+		nni_listener_bump_error(p->p_listener, err);
+	}
 }

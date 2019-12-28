@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -8,14 +8,16 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "core/nng_impl.h"
-#include "nng.h"
-#include "protocol/reqrep0/rep.h"
-#include "protocol/reqrep0/req.h"
-#include "supplemental/util/platform.h"
 #include <stdlib.h>
 #include <string.h>
+
+#include <nng/nng.h>
+#include <nng/protocol/reqrep0/rep.h>
+#include <nng/protocol/reqrep0/req.h>
+#include <nng/supplemental/util/platform.h>
+
+#include "convey.h"
+#include "core/nng_impl.h"
 
 // Transport common tests.  By making a common test framework for transports,
 // we can avoid rewriting the same tests for each new transport.  Include this
@@ -56,21 +58,6 @@ extern void trantest_test_all(const char *addr);
 #ifndef NNG_TRANSPORT_ZEROTIER
 #define nng_zt_register notransport
 #endif
-#ifndef NNG_TRANSPORT_INPROC
-#define nng_inproc_register notransport
-#endif
-#ifndef NNG_TRANSPORT_IPC
-#define nng_ipc_register notransport
-#endif
-#ifndef NNG_TRANSPORT_TCP
-#define nng_tcp_register notransport
-#endif
-#ifndef NNG_TRANSPORT_TLS
-#define nng_tls_register notransport
-#endif
-#ifndef NNG_TRANSPORT_WS
-#define nng_ws_register notransport
-#endif
 #ifndef NNG_TRANSPORT_WSS
 #define nng_wss_register notransport
 #endif
@@ -89,21 +76,6 @@ notransport(void)
 void
 trantest_checktran(const char *url)
 {
-#ifndef NNG_TRANSPORT_INPROC
-	CHKTRAN(url, "inproc:");
-#endif
-#ifndef NNG_TRANSPORT_IPC
-	CHKTRAN(url, "ipc:");
-#endif
-#ifndef NNG_TRANSPORT_TCP
-	CHKTRAN(url, "tcp:");
-#endif
-#ifndef NNG_TRANSPORT_TLS
-	CHKTRAN(url, "tls+tcp:");
-#endif
-#ifndef NNG_TRANSPORT_WS
-	CHKTRAN(url, "ws:");
-#endif
 #ifndef NNG_TRANSPORT_WSS
 	CHKTRAN(url, "wss:");
 #endif
@@ -146,20 +118,14 @@ trantest_init(trantest *tt, const char *addr)
 {
 	trantest_next_address(tt->addr, addr);
 
-#if defined(NNG_HAVE_REQ0) && defined(NNG_HAVE_REP0)
 	So(nng_req_open(&tt->reqsock) == 0);
 	So(nng_rep_open(&tt->repsock) == 0);
 
-	nni_url *url;
+	nng_url *url;
 	So(nng_url_parse(&url, tt->addr) == 0);
-#if defined(NNG_STATIC_LIB)
 	tt->tran = nni_tran_find(url);
 	So(tt->tran != NULL);
-#endif
 	nng_url_free(url);
-#else
-	ConveySkip("Missing REQ or REP protocols");
-#endif
 }
 
 void
@@ -220,15 +186,11 @@ trantest_listen(trantest *tt, nng_listener *lp)
 void
 trantest_scheme(trantest *tt)
 {
-#if NNG_STATIC_LIB
 	Convey("Scheme is correct", {
 		size_t l = strlen(tt->tran->tran_scheme);
 		So(strncmp(tt->addr, tt->tran->tran_scheme, l) == 0);
 		So(strncmp(tt->addr + l, "://", 3) == 0);
 	})
-#else
-	(void) tt;
-#endif
 }
 
 void

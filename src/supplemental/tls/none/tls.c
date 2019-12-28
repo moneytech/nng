@@ -1,6 +1,7 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
+// Copyright 2018 Devolutions <info@devolutions.net>
 //
 // This software is supplied under the terms of the MIT License, a
 // copy of which should be located in the distribution where this
@@ -17,7 +18,6 @@
 // We provide stub functions only to satisfy linkage.
 
 #include "core/nng_impl.h"
-#include "supplemental/tls/tls.h"
 #include "supplemental/tls/tls_api.h"
 
 void
@@ -38,74 +38,6 @@ void
 nni_tls_config_hold(nng_tls_config *cfg)
 {
 	NNI_ARG_UNUSED(cfg);
-}
-
-void
-nni_tls_fini(nni_tls *tp)
-{
-	NNI_ARG_UNUSED(tp);
-}
-
-int
-nni_tls_init(nni_tls **tpp, nng_tls_config *cfg, nni_tcp_conn *tcp)
-{
-	NNI_ARG_UNUSED(tpp);
-	NNI_ARG_UNUSED(cfg);
-	NNI_ARG_UNUSED(tcp);
-
-	return (NNG_ENOTSUP);
-}
-
-// nni_tls_send is the exported send function.  It has a similar
-// calling convention as the platform TCP pipe.
-void
-nni_tls_send(nni_tls *tp, nni_aio *aio)
-{
-	NNI_ARG_UNUSED(tp);
-	nni_aio_finish_error(aio, NNG_ENOTSUP);
-}
-
-void
-nni_tls_recv(nni_tls *tp, nni_aio *aio)
-{
-	NNI_ARG_UNUSED(tp);
-	nni_aio_finish_error(aio, NNG_ENOTSUP);
-}
-
-int
-nni_tls_peername(nni_tls *tp, nni_sockaddr *sa)
-{
-	NNI_ARG_UNUSED(tp);
-	NNI_ARG_UNUSED(sa);
-	return (NNG_ENOTSUP);
-}
-
-int
-nni_tls_sockname(nni_tls *tp, nni_sockaddr *sa)
-{
-	NNI_ARG_UNUSED(tp);
-	NNI_ARG_UNUSED(sa);
-	return (NNG_ENOTSUP);
-}
-
-void
-nni_tls_close(nni_tls *tp)
-{
-	NNI_ARG_UNUSED(tp);
-}
-
-const char *
-nni_tls_ciphersuite_name(nni_tls *tp)
-{
-	NNI_ARG_UNUSED(tp);
-	return (NULL);
-}
-
-bool
-nni_tls_verified(nni_tls *tp)
-{
-	NNI_ARG_UNUSED(tp);
-	return (false);
 }
 
 int
@@ -193,4 +125,30 @@ void
 nng_tls_config_free(nng_tls_config *cfg)
 {
 	NNI_ARG_UNUSED(cfg);
+}
+
+int
+nni_tls_dialer_alloc(nng_stream_dialer **dp, const nng_url *url)
+{
+	NNI_ARG_UNUSED(dp);
+	NNI_ARG_UNUSED(url);
+	return (NNG_ENOTSUP);
+}
+
+int
+nni_tls_listener_alloc(nng_stream_listener **lp, const nng_url *url)
+{
+	NNI_ARG_UNUSED(lp);
+	NNI_ARG_UNUSED(url);
+	return (NNG_ENOTSUP);
+}
+
+int
+nni_tls_checkopt(const char *nm, const void *buf, size_t sz, nni_type t)
+{
+	NNI_ARG_UNUSED(nm);
+	NNI_ARG_UNUSED(buf);
+	NNI_ARG_UNUSED(sz);
+	NNI_ARG_UNUSED(t);
+	return (NNG_ENOTSUP);
 }

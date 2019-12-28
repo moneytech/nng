@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,18 +9,16 @@
 #
 
 # Surveyor/Respondent protocol
+option (NNG_PROTO_RESPONDENT0 "Enable RESPONDENTv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_RESPONDENT0)
 
-if (NNG_PROTO_SURVEYOR0)
-    set(SURV0_SOURCES protocol/survey0/survey.c protocol/survey0/xsurvey.c
-    protocol/survey0/survey.h)
-    set(SURV0_HEADERS protocol/survey0/survey.h)
-endif()
+option (NNG_PROTO_SURVEYOR0 "Enable SURVEYORv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_SURVEYOR0)
 
-if (NNG_PROTO_RESPONDENT0)
-    set(RESP0_SOURCES protocol/survey0/respond.c protocol/survey0/xrespond.c
-    protocol/survey0/respond.h)
-    set(RESP0_HEADERS protocol/survey0/respond.h)
-endif()
+nng_sources_if(NNG_PROTO_SURVEYOR0 survey.c xsurvey.c)
+nng_headers_if(NNG_PROTO_SURVEYOR0 nng/protocol/survey0/survey.h)
+nng_defines_if(NNG_PROTO_SURVEYOR0 NNG_HAVE_SURVEYOR0)
 
-set(NNG_SOURCES ${NNG_SOURCES} ${SURV0_SOURCES} ${RESP0_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${SURV0_HEADERS} ${RESP0_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_PROTO_RESPONDENT0 respond.c xrespond.c)
+nng_headers_if(NNG_PROTO_RESPONDENT0 nng/protocol/survey0/respond.h)
+nng_defines_if(NNG_PROTO_RESPONDENT0 NNG_HAVE_RESPONDENT0)

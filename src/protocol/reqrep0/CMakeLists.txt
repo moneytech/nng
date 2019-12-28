@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,18 +9,18 @@
 #
 
 #  Req/Rep protocol
+option(NNG_PROTO_REQ0 "Enable REQv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_REQ0)
 
-if (NNG_PROTO_REQ0)
-    set(REQ0_SOURCES protocol/reqrep0/req.c protocol/reqrep0/xreq.c
-    protocol/reqrep0/req.h)
-    set(REQ0_HEADERS protocol/reqrep0/req.h)
-endif()
+option(NNG_PROTO_REP0 "Enable REPv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_REP0)
 
-if (NNG_PROTO_REP0)
-    set(REP0_SOURCES protocol/reqrep0/rep.c protocol/reqrep0/xrep.c
-    protocol/reqrep0/rep.h)
-    set(REP0_HEADERS protocol/reqrep0/rep.h)
-endif()
+nng_sources_if(NNG_PROTO_REQ0 req.c xreq.c)
+nng_headers_if(NNG_PROTO_REQ0 nng/protocol/reqrep0/req.h)
+nng_defines_if(NNG_PROTO_REQ0 NNG_HAVE_REQ0)
 
-set(NNG_SOURCES ${NNG_SOURCES} ${REQ0_SOURCES} ${REP0_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${REQ0_HEADERS} ${REP0_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_PROTO_REP0 rep.c xrep.c)
+nng_headers_if(NNG_PROTO_REP0 nng/protocol/reqrep0/rep.h)
+nng_defines_if(NNG_PROTO_REP0 NNG_HAVE_REP0)
+
+nng_test(reqrep_test)

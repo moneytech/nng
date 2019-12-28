@@ -11,8 +11,6 @@
 #ifndef PLATFORM_WIN_IMPL_H
 #define PLATFORM_WIN_IMPL_H
 
-#ifdef NNG_PLATFORM_WINDOWS
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -77,9 +75,7 @@ struct nni_plat_flock {
 
 extern int nni_win_error(int);
 
-extern int  nni_win_tcp_conn_init(nni_tcp_conn **, SOCKET);
-extern void nni_win_tcp_conn_set_addrs(
-    nni_tcp_conn *, const SOCKADDR_STORAGE *, const SOCKADDR_STORAGE *);
+extern int nni_win_tcp_conn_init(nni_tcp_conn **, SOCKET);
 
 extern int  nni_win_io_sysinit(void);
 extern void nni_win_io_sysfini(void);
@@ -105,7 +101,5 @@ extern int nni_win_sockaddr2nn(nni_sockaddr *, const SOCKADDR_STORAGE *);
 extern int nni_win_nn2sockaddr(SOCKADDR_STORAGE *, const nni_sockaddr *);
 
 #define NNG_PLATFORM_DIR_SEP "\\"
-
-#endif // NNG_PLATFORM_WINDOWS
 
 #endif // PLATFORM_WIN_IMPL_H

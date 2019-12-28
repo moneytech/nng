@@ -1,4 +1,4 @@
-= nng_version(3)
+= nng_stat_value(3)
 //
 // Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
@@ -21,7 +21,7 @@ nng_stat_value - get statistic value
 
 typedef struct nng_stat nng_stat;
 
-uint64_t nng_stat_string(nng_stat *stat);
+uint64_t nng_stat_value(nng_stat *stat);
 ----
 
 == DESCRIPTION
@@ -29,8 +29,8 @@ uint64_t nng_stat_string(nng_stat *stat);
 The `nng_stat_value()` function returns a numeric value for the statistic _stat_.
 If the statistic has a boolean value, then zero is returned for `false`, and
 one is returned for `true`.
-Otherwise, if the string is not of numeric type, then zero is returned.
-See `<<nng_stat_type.3#,nng_stat_type(3)>>` for a description of statistic types.
+Otherwise, if the statistic is not of numeric type, then zero is returned.
+See xref:nng_stat_type.3.adoc[`nng_stat_type()`] for a description of statistic types.
 
 == RETURN VALUES
 
@@ -43,9 +43,9 @@ None.
 == SEE ALSO
 
 [.text-left]
-<<libnng.3#,libnng(3)>>,
-<<nng_stats_get.3#,nng_stats_get(3)>>,
-<<nng_stat_type.3#,nng_stat_type(3)>>,
-<<nng_stat_unit.3#,nng_stat_unit(3)>>,
-<<nng_stat.5#,nng_stat(5)>>,
-<<nng.7#,nng(7)>>
+xref:libnng.3.adoc[libnng(3)],
+xref:nng_stats_get.3.adoc[nng_stats_get(3)],
+xref:nng_stat_type.3.adoc[nng_stat_type(3)],
+xref:nng_stat_unit.3.adoc[nng_stat_unit(3)],
+xref:nng_stat.5.adoc[nng_stat(5)],
+xref:nng.7.adoc[nng(7)]

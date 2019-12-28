@@ -8,10 +8,12 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "nng.h"
-
 #include <string.h>
+
+#include <nng/nng.h>
+
+#include "convey.h"
+
 static uint8_t dat123[] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3 };
 
 TestMain("Message Tests", {
@@ -182,6 +184,16 @@ TestMain("Message Tests", {
 			So(strcmp(nng_msg_body(msg), "wayback") == 0);
 			So(nng_msg_len(m2) == strlen("back2basics") + 1);
 			So(strcmp(nng_msg_body(m2), "back2basics") == 0);
+		});
+
+		Convey("Message dup copies pipe", {
+			nng_pipe p  = NNG_PIPE_INITIALIZER;
+			nng_msg *m2;
+			memset(&p, 0x22, sizeof(p));
+			nng_msg_set_pipe(msg, p);
+			So(nng_msg_dup(&m2, msg) == 0);
+			p = nng_msg_get_pipe(m2);
+			So(nng_pipe_id(p) == 0x22222222);
 		});
 
 		Convey("Missing option fails properly", {

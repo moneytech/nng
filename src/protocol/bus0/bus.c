@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/bus0/bus.h"
+#include "nng/protocol/bus0/bus.h"
 
 // Bus protocol.  The BUS protocol, each peer sends a message to its peers.
 // However, bus protocols do not "forward" (absent a device).  So in order
@@ -439,7 +439,7 @@ static nni_proto_pipe_ops bus0_pipe_ops = {
 	.pipe_stop  = bus0_pipe_stop,
 };
 
-static nni_proto_option bus0_sock_options[] = {
+static nni_option bus0_sock_options[] = {
 	// terminate list
 	{
 	    .o_name = NULL,

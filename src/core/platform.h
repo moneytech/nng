@@ -1,6 +1,7 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
+// Copyright 2018 Devolutions <info@devolutions.net>
 //
 // This software is supplied under the terms of the MIT License, a
 // copy of which should be located in the distribution where this
@@ -50,6 +51,11 @@ extern void nni_plat_abort(void);
 // during core debugging, or to emit panic messages.  Message content will
 // not contain newlines, but the output will add them.
 extern void nni_plat_println(const char *);
+
+// nni_plat_printf is like printf.  It should conform to C99 standard printf,
+// but is a function to allow platform ports to redirect.  It should go to
+// the same place that nni_plat_println does.
+extern void nni_plat_printf(const char *, ...);
 
 // nni_plat_strerror allows the platform to use additional error messages
 // for additional error codes.  The err code passed in should be the
@@ -166,11 +172,13 @@ extern void nni_atomic_flag_reset(nni_atomic_flag *);
 typedef struct nni_atomic_u64 nni_atomic_u64;
 
 extern void     nni_atomic_init64(nni_atomic_u64 *);
-extern void     nni_atomic_inc64(nni_atomic_u64 *, uint64_t);
-extern void     nni_atomic_dec64(nni_atomic_u64 *, uint64_t);
+extern void     nni_atomic_add64(nni_atomic_u64 *, uint64_t);
+extern void     nni_atomic_sub64(nni_atomic_u64 *, uint64_t);
 extern uint64_t nni_atomic_get64(nni_atomic_u64 *);
 extern void     nni_atomic_set64(nni_atomic_u64 *, uint64_t);
 extern uint64_t nni_atomic_swap64(nni_atomic_u64 *, uint64_t);
+extern uint64_t nni_atomic_dec64_nv(nni_atomic_u64 *);
+extern void     nni_atomic_inc64(nni_atomic_u64 *);
 
 //
 // Clock Support
@@ -227,41 +235,6 @@ typedef struct nni_tcp_conn     nni_tcp_conn;
 typedef struct nni_tcp_dialer   nni_tcp_dialer;
 typedef struct nni_tcp_listener nni_tcp_listener;
 
-extern void nni_tcp_conn_fini(nni_tcp_conn *);
-
-// nni_tcp_conn_close closes the connection, which might actually be
-// implemented as a shutdown() call.
-// Further operations on it should return NNG_ECLOSED.
-extern void nni_tcp_conn_close(nni_tcp_conn *);
-
-// nni_tcp_conn_send sends data in the iov buffers to the peer.
-// The platform may modify the iovs.
-extern void nni_tcp_conn_send(nni_tcp_conn *, nni_aio *);
-
-// nni_tcp_conn_recv receives data into the buffers provided by the
-// I/O vector (iovs).  The platform should attempt to scatter the received
-// data into the iovs if possible.
-//
-// It is possible for the reader to return less data than is requested,
-// in which case the caller is responsible for resubmitting.  The platform
-// must not return "zero" data however.  (It is an error to attempt to
-// receive zero bytes.)  The platform may modify the iovs.
-extern void nni_tcp_conn_recv(nni_tcp_conn *, nni_aio *);
-
-// nni_tcp_conn_peername gets the peer name.
-extern int nni_tcp_conn_peername(nni_tcp_conn *, nni_sockaddr *);
-
-// nni_tcp_conn_sockname gets the local name.
-extern int nni_tcp_conn_sockname(nni_tcp_conn *, nni_sockaddr *);
-
-// nni_tcp_conn_set_nodelay indicates that the TCP pipe should send
-// data immediately, without any buffering.  (Disable Nagle's algorithm.)
-extern int nni_tcp_conn_set_nodelay(nni_tcp_conn *, bool);
-
-// nni_tcp_conn_set_keepalive indicates that the TCP pipe should send
-// keepalive probes.  Tuning of these keepalives is current unsupported.
-extern int nni_tcp_conn_set_keepalive(nni_tcp_conn *, bool);
-
 // nni_tcp_dialer_init creates a new dialer object.
 extern int nni_tcp_dialer_init(nni_tcp_dialer **);
 
@@ -274,20 +247,22 @@ extern void nni_tcp_dialer_fini(nni_tcp_dialer *);
 // connection will be aborted.
 extern void nni_tcp_dialer_close(nni_tcp_dialer *);
 
-// nni_tcp_dialer_set_src_addr sets the source address to use for outgoing
-// connections.  Only the IP (or IPv6) address may be specified; the port
-// must be zero.  This must be called before calling nni_tcp_dialer_dial.
-// The source address must be associated with one of the addresses on the
-// local system -- this is not checked until bind() is called just prior to
-// the connect() call.  Likewise the address family must be the same as the
-// address used when dialing, or errors will occur.
-extern int nni_tcp_dialer_set_src_addr(nni_tcp_dialer *, const nng_sockaddr *);
-
-// nni_tcp_dialer_dial attempts to create an outgoing connection,
-// asynchronously, to the address specified. On success, the first (and only)
+// nni_tcp_dial attempts to create an outgoing connection,
+// asynchronously, to the address in the aio. On success, the first (and only)
 // output will be an nni_tcp_conn * associated with the remote server.
-extern void nni_tcp_dialer_dial(
-    nni_tcp_dialer *, const nni_sockaddr *, nni_aio *);
+extern void nni_tcp_dial(nni_tcp_dialer *, nni_aio *);
+
+// nni_tcp_dialer_getopt gets an option from the dialer.
+extern int nni_tcp_dialer_setopt(
+    nni_tcp_dialer *, const char *, const void *, size_t, nni_type);
+
+// nni_tcp_dialer_setopt sets an option on the dialer. There is special
+// support for NNG_OPT_LOCADDR, which will be the source address (if legal)
+// for new connections, except that the port will be ignored.  The
+// NNG_OPT_TCP_NODELAY and NNG_OPT_TCP_KEEPALIVE options work to set the
+// initial values of those options on newly created connections.
+extern int nni_tcp_dialer_getopt(
+    nni_tcp_dialer *, const char *, void *, size_t *, nni_type);
 
 // nni_tcp_listener_init creates a new listener object, unbound.
 extern int nni_tcp_listener_init(nni_tcp_listener **);
@@ -301,22 +276,23 @@ extern void nni_tcp_listener_fini(nni_tcp_listener *);
 extern void nni_tcp_listener_close(nni_tcp_listener *);
 
 // nni_tcp_listener_listen creates the socket in listening mode, bound
-// to the specified address.  The address will be updated to reflect
-// the actual address bound (making it possible to bind to port 0 to
-// specify an ephemeral address, and then the actual address can be
-// examined afterwards.)
-extern int nni_tcp_listener_listen(nni_tcp_listener *, nni_sockaddr *);
+// to the specified address.
+extern int nni_tcp_listener_listen(nni_tcp_listener *, const nni_sockaddr *);
 
 // nni_tcp_listener_accept accepts in incoming connect, asynchronously.
 // On success, the first (and only) output will be an nni_tcp_conn *
 // associated with the remote peer.
 extern void nni_tcp_listener_accept(nni_tcp_listener *, nni_aio *);
 
-// nni_ntop obtains the IP address for the socket (enclosing it
-// in brackets if it is IPv6) and port.  Enough space for both must
-// be present (48 bytes and 6 bytes each), although if either is NULL then
-// those components are skipped.  This is based on inet_ntop.
-extern int nni_ntop(const nni_sockaddr *, char *, char *);
+// nni_tcp_listener_getopt gets an option from the listener.
+extern int nni_tcp_listener_setopt(
+    nni_tcp_listener *, const char *, const void *, size_t, nni_type);
+
+// nni_tcp_listener_setopt sets an option on the listener.  The most common
+// use for this is to retrieve the setting of the NNG_OPT_TCP_LOCADDR
+// address after binding to wild card port (0).
+extern int nni_tcp_listener_getopt(
+    nni_tcp_listener *, const char *, void *, size_t *, nni_type);
 
 // nni_tcp_resolv resolves a TCP name asynchronously.  The family
 // should be one of NNG_AF_INET, NNG_AF_INET6, or NNG_AF_UNSPEC.  The
@@ -338,98 +314,12 @@ typedef struct nni_ipc_conn     nni_ipc_conn;
 typedef struct nni_ipc_dialer   nni_ipc_dialer;
 typedef struct nni_ipc_listener nni_ipc_listener;
 
-// nni_ipc_conn_fini disposes of the connection.
-extern void nni_ipc_conn_fini(nni_ipc_conn *);
-
-// nni_ipc_conn_close closes the connection, which might actually be
-// implemented as a shutdown() call.
-// Further operations on it should return NNG_ECLOSED.
-extern void nni_ipc_conn_close(nni_ipc_conn *);
-
-// nni_ipc_conn_send sends data in the iov buffers to the peer.
-// The platform may modify the iovs.
-extern void nni_ipc_conn_send(nni_ipc_conn *, nni_aio *);
-
-// nni_ipc_conn_recv receives data into the buffers provided by the
-// I/O vector (iovs).  The platform should attempt to scatter the received
-// data into the iovs if possible.
-//
-// It is possible for the reader to return less data than is requested,
-// in which case the caller is responsible for resubmitting.  The platform
-// must not return "zero" data however.  (It is an error to attempt to
-// receive zero bytes.)  The platform may modify the iovs.
-extern void nni_ipc_conn_recv(nni_ipc_conn *, nni_aio *);
-
-// nni_ipc_conn_get_peer_uid obtains the peer user id, if possible.
-// NB: Only POSIX systems support user IDs.
-extern int nni_ipc_conn_get_peer_uid(nni_ipc_conn *, uint64_t *);
-
-// nni_ipc_conn_get_peer_gid obtains the peer group id, if possible.
-// NB: Only POSIX systems support group IDs.
-extern int nni_ipc_conn_get_peer_gid(nni_ipc_conn *, uint64_t *);
-
-// nni_ipc_conn_get_peer_pid obtains the peer process id, if possible.
-extern int nni_ipc_conn_get_peer_pid(nni_ipc_conn *, uint64_t *);
-
-// nni_ipc_conn_get_peer_zoneid obtains the peer zone id, if possible.
-// NB: Only illumos & SunOS systems have the notion of "zones".
-extern int nni_ipc_conn_get_peer_zoneid(nni_ipc_conn *, uint64_t *);
-
-// nni_ipc_dialer_init creates a new dialer object.
-extern int nni_ipc_dialer_init(nni_ipc_dialer **);
-
-// nni_ipc_dialer_fini finalizes the dialer, closing it and freeing
-// all resources.
-extern void nni_ipc_dialer_fini(nni_ipc_dialer *);
-
-// nni_ipc_dialer_close closes the dialer.
-// Further operations on it should return NNG_ECLOSED.  Any in-progress
-// connection will be aborted.
-extern void nni_ipc_dialer_close(nni_ipc_dialer *);
-
-// nni_ipc_dialer_dial attempts to create an outgoing connection,
-// asynchronously, to the address specified. On success, the first (and only)
-// output will be an nni_ipc_conn * associated with the remote server.
-extern void nni_ipc_dialer_dial(
-    nni_ipc_dialer *, const nni_sockaddr *, nni_aio *);
-
-// nni_ipc_listener_init creates a new listener object, unbound.
-extern int nni_ipc_listener_init(nni_ipc_listener **);
-
-// nni_ipc_listener_fini frees the listener and all associated resources.
-// It implictly closes the listener as well.
-extern void nni_ipc_listener_fini(nni_ipc_listener *);
-
-// nni_ipc_listener_close closes the listener.  This will unbind
-// any bound socket, and further operations will result in NNG_ECLOSED.
-extern void nni_ipc_listener_close(nni_ipc_listener *);
-
-// nni_ipc_listener_listen creates the socket in listening mode, bound
-// to the specified address.  Unlike TCP, this address does not change.
-extern int nni_ipc_listener_listen(nni_ipc_listener *, const nni_sockaddr *);
-
-// nni_ipc_listener_accept accepts in incoming connect, asynchronously.
-// On success, the first (and only) output will be an nni_ipc_conn *
-// associated with the remote peer.
-extern void nni_ipc_listener_accept(nni_ipc_listener *, nni_aio *);
-
-// nni_ipc_listener_set_permissions sets UNIX style permissions
-// on the named pipes.  This basically just does a chmod() on the
-// named pipe, and is only supported o the server side, and only on
-// systems that support this (POSIX, not Windows).  Note that changing
-// ownership is not supported at this time.  Most systems use only
-// 16-bits, the lower 12 of which are user, group, and other, e.g.
-// 0640 gives read/write access to user, read to group, and prevents
-// any other user from accessing it.  On platforms without this support,
-// ENOTSUP is returned.
-extern int nni_ipc_listener_set_permissions(nni_ipc_listener *, int);
-
-// nni_ipc_listener_set_security_descriptor sets the Windows security
-// descriptor. This is *only* supported for Windows platforms.  All
-// others return NNG_ENOTSUP.  The void argument is a pointer to
-// a SECURITY_DESCRIPTOR object, and must be valid.
-extern int nni_ipc_listener_set_security_descriptor(
-    nni_ipc_listener *, void *);
+// IPC is so different from platform to platform.  The following should
+// be implemented.  If IPC isn't supported, all of these functions should
+// be stubs that just return NNG_ENOTSUP.
+extern int nni_ipc_dialer_alloc(nng_stream_dialer **, const nng_url *);
+extern int nni_ipc_listener_alloc(nng_stream_listener **, const nng_url *);
+extern int nni_ipc_checkopt(const char *, const void *, size_t, nni_type);
 
 //
 // UDP support. UDP is not connection oriented, and only has the notion

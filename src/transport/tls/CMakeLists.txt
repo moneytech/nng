@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,11 +9,10 @@
 #
 
 # TLS transport
+CMAKE_DEPENDENT_OPTION(NNG_TRANSPORT_TLS "Enable TLS transport" ON
+    "NNG_ENABLE_TLS" OFF)
+mark_as_advanced(NNG_TRANSPORT_TLS)
 
-if (NNG_TRANSPORT_TLS)
-    set(TLS_SOURCES transport/tls/tls.c transport/tls/tls.h)
-    set(TLS_HEADERS transport/tls/tls.h)
-endif()
-
-set(NNG_SOURCES ${NNG_SOURCES} ${TLS_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${TLS_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_TRANSPORT_TLS tls.c)
+nng_headers_if(NNG_TRANSPORT_TLS nng/transport/tls/tls.h)
+nng_defines_if(NNG_TRANSPORT_TLS NNG_TRANSPORT_TLS)

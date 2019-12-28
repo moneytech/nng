@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,11 +9,9 @@
 #
 
 # ipc protocol
+option (NNG_TRANSPORT_IPC "Enable IPC transport." ON)
+mark_as_advanced(NNG_TRANSPORT_IPC)
 
-if (NNG_TRANSPORT_IPC)
-    set(IPC_SOURCES transport/ipc/ipc.c transport/ipc/ipc.h)
-    set(IPC_HEADERS transport/ipc/ipc.h)
-endif()
-
-set(NNG_SOURCES ${NNG_SOURCES} ${IPC_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${IPC_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_TRANSPORT_IPC ipc.c)
+nng_headers_if(NNG_TRANSPORT_IPC nng/transport/ipc/ipc.h)
+nng_defines_if(NNG_TRANSPORT_IPC NNG_TRANSPORT_IPC)

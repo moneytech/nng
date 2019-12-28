@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/reqrep0/rep.h"
+#include "nng/protocol/reqrep0/rep.h"
 
 // Response protocol.  The REP protocol is the "reply" side of a
 // request-reply pair.  This is useful for building RPC servers, for
@@ -482,6 +482,14 @@ rep0_ctx_recv(void *arg, nni_aio *aio)
 			nni_aio_finish_error(aio, rv);
 			return;
 		}
+		if (ctx->raio != NULL) {
+			// Cannot have a second receive operation pending.
+			// This could be ESTATE, or we could cancel the first
+			// with ECANCELED.  We elect the former.
+			nni_mtx_unlock(&s->lk);
+			nni_aio_finish_error(aio, NNG_ESTATE);
+			return;
+		}
 		ctx->raio = aio;
 		nni_list_append(&s->recvq, ctx);
 		nni_mtx_unlock(&s->lk);
@@ -679,21 +687,18 @@ static nni_proto_ctx_ops rep0_ctx_ops = {
 	.ctx_recv = rep0_ctx_recv,
 };
 
-static nni_proto_option rep0_sock_options[] = {
+static nni_option rep0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = rep0_sock_get_maxttl,
 	    .o_set  = rep0_sock_set_maxttl,
 	},
 	{
 	    .o_name = NNG_OPT_RECVFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = rep0_sock_get_recvfd,
 	},
 	{
 	    .o_name = NNG_OPT_SENDFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = rep0_sock_get_sendfd,
 	},
 	// terminate list

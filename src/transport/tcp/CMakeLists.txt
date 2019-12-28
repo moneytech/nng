@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,11 +9,9 @@
 #
 
 # TCP protocol
+option (NNG_TRANSPORT_TCP "Enable TCP transport." ON)
+mark_as_advanced(NNG_TRANSPORT_TCP)
 
-if (NNG_TRANSPORT_TCP)
-    set(TCP_SOURCES transport/tcp/tcp.c transport/tcp/tcp.h)
-    set(TCP_HEADERS transport/tcp/tcp.h)
-endif()
-
-set(NNG_SOURCES ${NNG_SOURCES} ${TCP_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${TCP_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_TRANSPORT_TCP tcp.c)
+nng_headers_if(NNG_TRANSPORT_TCP nng/transport/tcp/tcp.h)
+nng_defines_if(NNG_TRANSPORT_TCP NNG_TRANSPORT_TCP)

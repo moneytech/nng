@@ -1,4 +1,4 @@
-= nng_alloc(3)
+= nng_stats_get(3)
 //
 // Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
@@ -21,7 +21,7 @@ nng_stats_get - get statistics snapshot
 
 typedef struct nng_stat nng_stat;
 
-int nng_stats_get(nng_stat *statsp)
+int nng_stats_get(nng_stat **statsp)
 ----
 
 == DESCRIPTION
@@ -37,12 +37,12 @@ statistic of type `NNG_STAT_SCOPE` that carries no value, and which
 has an empty name.
 This parent statistic is returned through the _statsp_ pointer.
 
-The `<<nng_stat_child.3#,nng_stat_child()>>` and
-`<<nng_stat_next.3#,nng_stat_next()>>` function can be used to
+The xref:nng_stat_child.3.adoc[`nng_stat_child()`] and
+xref:nng_stat_next.3.adoc[`nng_stat_next()`] function can be used to
 iterate over the the tree.
 
 When no longer needed, the statistics can be freed with the
-`<<nng_stats_free.3#,nng_stats_free()>>` function, but that
+xref:nng_stats_free.3.adoc[`nng_stats_free()`] function, but that
 function must be called only with the root statistic that is returned
 through the _statsp_ pointer.
 
@@ -72,15 +72,15 @@ and `NULL` otherwise.
 == SEE ALSO
 
 [.text-left]
-<<nng_stats_free.3#,nng_stats_free(3)>>,
-<<nng_stat_child.3#,nng_stat_child(3)>>,
-<<nng_stat_desc.3#,nng_stat_desc(3)>>,
-<<nng_stat_name.3#,nng_stat_name(3)>>,
-<<nng_stat_next.3#,nng_stat_next(3)>>,
-<<nng_stat_string.3#,nng_stat_string(3)>>,
-<<nng_stat_type.3#,nng_stat_type(3)>>,
-<<nng_stat_timestamp.3#,nng_stat_timestamp(3)>>,
-<<nng_stat_unit.3#,nng_stat_unit(3)>>,
-<<nng_stat_value.3#,nng_stat_value(3)>>,
-<<nng_stat.5#,nng_stat(5)>>,
-<<nng.7#,nng(7)>>
+xref:nng_stats_free.3.adoc[nng_stats_free(3)],
+xref:nng_stat_child.3.adoc[nng_stat_child(3)],
+xref:nng_stat_desc.3.adoc[nng_stat_desc(3)],
+xref:nng_stat_name.3.adoc[nng_stat_name(3)],
+xref:nng_stat_next.3.adoc[nng_stat_next(3)],
+xref:nng_stat_string.3.adoc[nng_stat_string(3)],
+xref:nng_stat_type.3.adoc[nng_stat_type(3)],
+xref:nng_stat_timestamp.3.adoc[nng_stat_timestamp(3)],
+xref:nng_stat_unit.3.adoc[nng_stat_unit(3)],
+xref:nng_stat_value.3.adoc[nng_stat_value(3)],
+xref:nng_stat.5.adoc[nng_stat(5)],
+xref:nng.7.adoc[nng(7)]

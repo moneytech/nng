@@ -8,14 +8,15 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "nng.h"
-#include "protocol/pubsub0/pub.h"
-#include "protocol/pubsub0/sub.h"
-#include "stubs.h"
-#include "supplemental/util/platform.h"
-
 #include <string.h>
+
+#include <nng/nng.h>
+#include <nng/protocol/pubsub0/pub.h>
+#include <nng/protocol/pubsub0/sub.h>
+#include <nng/supplemental/util/platform.h>
+
+#include "convey.h"
+#include "stubs.h"
 
 #define APPENDSTR(m, s) nng_msg_append(m, s, strlen(s))
 #define CHECKSTR(m, s)                   \
@@ -135,16 +136,35 @@ TestMain("PUB/SUB pattern", {
 			nng_msg_free(msg);
 		});
 
-		Convey("Subs without subsciptions don't receive", {
+		Convey("Subs using NNG_FLAG_NONBLOCK and no sub", {
 			nng_msg *msg;
-			So(nng_setopt_ms(sub, NNG_OPT_RECVTIMEO, 90) == 0);
 
 			So(nng_msg_alloc(&msg, 0) == 0);
 			APPENDSTR(msg, "/some/don't/like/it");
 			So(nng_sendmsg(pub, msg, 0) == 0);
-			So(nng_recvmsg(sub, &msg, 0) == NNG_ETIMEDOUT);
+			So(nng_recvmsg(sub, &msg, NNG_FLAG_NONBLOCK) == NNG_EAGAIN);
 		});
-	});
+            Convey("Subs using NNG_FLAG_NONBLOCK and empty sub", {
+                    nng_msg *msg;
+                    char *buf;
+                    size_t size;
+
+                    So(nng_setopt(sub, NNG_OPT_SUB_SUBSCRIBE, "", 0)  == 0);
+                    So(nng_recvmsg(sub, &msg, NNG_FLAG_NONBLOCK) == NNG_EAGAIN);
+                    So(nng_recv(sub, &buf, &size, NNG_FLAG_NONBLOCK | NNG_FLAG_ALLOC) == NNG_EAGAIN);
+            });
+
+            Convey("Subs without subscriptions don't receive", {
+                    nng_msg *msg;
+                    So(nng_setopt_ms(sub, NNG_OPT_RECVTIMEO, 90) == 0);
+
+                    So(nng_msg_alloc(&msg, 0) == 0);
+                    APPENDSTR(msg, "/some/don't/like/it");
+                    So(nng_sendmsg(pub, msg, 0) == 0);
+                    So(nng_recvmsg(sub, &msg, 0) == NNG_ETIMEDOUT);
+            });
+
+        });
 
 	Convey("Subs in raw receive", {
 		nng_msg *  msg;

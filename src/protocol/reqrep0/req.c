@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/reqrep0/req.h"
+#include "nng/protocol/reqrep0/req.h"
 
 // Request protocol.  The REQ protocol is the "request" side of a
 // request-reply pair.  This is useful for building RPC clients, for example.
@@ -515,8 +515,12 @@ req0_run_sendq(req0_sock *s, nni_list *aiolist)
 
 		// Schedule a resubmit timer.  We only do this if we got
 		// a pipe to send to.  Otherwise, we should get handled
-		// the next time that the sendq is run.
-		nni_timer_schedule(&ctx->timer, nni_clock() + ctx->retry);
+		// the next time that the sendq is run.  We don't do this
+		// if the retry is "disabled" with NNG_DURATION_INFINITE.
+		if (ctx->retry > 0) {
+			nni_timer_schedule(
+			    &ctx->timer, nni_clock() + ctx->retry);
+		}
 
 		if (nni_msg_dup(&msg, ctx->reqmsg) != 0) {
 			// Oops.  Well, keep trying each context; maybe
@@ -851,10 +855,9 @@ static nni_proto_pipe_ops req0_pipe_ops = {
 	.pipe_stop  = req0_pipe_stop,
 };
 
-static nni_proto_option req0_ctx_options[] = {
+static nni_option req0_ctx_options[] = {
 	{
 	    .o_name = NNG_OPT_REQ_RESENDTIME,
-	    .o_type = NNI_TYPE_DURATION,
 	    .o_get  = req0_ctx_get_resendtime,
 	    .o_set  = req0_ctx_set_resendtime,
 	},
@@ -871,27 +874,23 @@ static nni_proto_ctx_ops req0_ctx_ops = {
 	.ctx_options = req0_ctx_options,
 };
 
-static nni_proto_option req0_sock_options[] = {
+static nni_option req0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = req0_sock_get_maxttl,
 	    .o_set  = req0_sock_set_maxttl,
 	},
 	{
 	    .o_name = NNG_OPT_REQ_RESENDTIME,
-	    .o_type = NNI_TYPE_DURATION,
 	    .o_get  = req0_sock_get_resendtime,
 	    .o_set  = req0_sock_set_resendtime,
 	},
 	{
 	    .o_name = NNG_OPT_RECVFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = req0_sock_get_recvfd,
 	},
 	{
 	    .o_name = NNG_OPT_SENDFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = req0_sock_get_sendfd,
 	},
 	// terminate list

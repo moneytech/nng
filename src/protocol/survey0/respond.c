@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/survey0/respond.h"
+#include "nng/protocol/survey0/respond.h"
 
 // Respondent protocol.  The RESPONDENT protocol is the "replier" side of
 // the surveyor pattern.  This is useful for building service discovery, or
@@ -123,7 +123,7 @@ resp0_ctx_init(void **ctxp, void *sarg)
 		return (NNG_ENOMEM);
 	}
 	NNI_LIST_NODE_INIT(&ctx->sqnode);
-	// XXX:	NNI_LIST_NODE_INIT(&ctx->rqnode);
+	NNI_LIST_NODE_INIT(&ctx->rqnode);
 	ctx->btrace_len = 0;
 	ctx->sock       = s;
 	ctx->pipe_id    = 0;
@@ -472,6 +472,13 @@ resp0_ctx_recv(void *arg, nni_aio *aio)
 			nni_aio_finish_error(aio, rv);
 			return;
 		}
+		// We cannot have two concurrent receive requests on the same
+		// context...
+		if (ctx->raio != NULL) {
+			nni_mtx_unlock(&s->mtx);
+			nni_aio_finish_error(aio, NNG_ESTATE);
+			return;
+		}
 		ctx->raio = aio;
 		nni_list_append(&s->recvq, ctx);
 		nni_mtx_unlock(&s->mtx);
@@ -656,22 +663,19 @@ static nni_proto_ctx_ops resp0_ctx_ops = {
 	.ctx_recv = resp0_ctx_recv,
 };
 
-static nni_proto_option resp0_sock_options[] = {
+static nni_option resp0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = resp0_sock_get_maxttl,
 	    .o_set  = resp0_sock_set_maxttl,
 	},
 	{
 	    .o_name = NNG_OPT_RECVFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = resp0_sock_get_recvfd,
 	    .o_set  = NULL,
 	},
 	{
 	    .o_name = NNG_OPT_SENDFD,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = resp0_sock_get_sendfd,
 	    .o_set  = NULL,
 	},

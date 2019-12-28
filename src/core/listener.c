@@ -1,6 +1,7 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
+// Copyright 2018 Devolutions <info@devolutions.net>
 //
 // This software is supplied under the terms of the MIT License, a
 // copy of which should be located in the distribution where this
@@ -97,27 +98,59 @@ listener_stats_init(nni_listener *l)
 	nni_stat_init_atomic(&st->s_accept, "accept", "connections accepted");
 	nni_stat_append(root, &st->s_accept);
 
-	nni_stat_init_atomic(
-	    &st->s_aborted, "aborted", "accepts aborted remotely");
-	nni_stat_append(root, &st->s_aborted);
+	nni_stat_init_atomic(&st->s_discon, "discon", "remote disconnects");
+	nni_stat_append(root, &st->s_discon);
 
-	nni_stat_init_atomic(&st->s_timedout, "timedout", "accepts timed out");
-	nni_stat_append(root, &st->s_timedout);
-
-	nni_stat_init_atomic(&st->s_canceled, "canceled", "accepts canceled");
+	nni_stat_init_atomic(&st->s_canceled, "canceled", "canceled");
 	nni_stat_append(root, &st->s_canceled);
 
-	nni_stat_init_atomic(
-	    &st->s_othererr, "othererr", "other accept errors");
+	nni_stat_init_atomic(&st->s_othererr, "othererr", "other errors");
 	nni_stat_append(root, &st->s_othererr);
 
-	nni_stat_init_atomic(
-	    &st->s_protorej, "protoreject", "pipes rejected by protocol");
-	nni_stat_append(root, &st->s_protorej);
+	nni_stat_init_atomic(&st->s_etimedout, "timedout", "timed out");
+	nni_stat_append(root, &st->s_etimedout);
 
-	nni_stat_init_atomic(
-	    &st->s_apprej, "appreject", "pipes rejected by application");
-	nni_stat_append(root, &st->s_apprej);
+	nni_stat_init_atomic(&st->s_eproto, "protoerr", "protcol errors");
+	nni_stat_append(root, &st->s_eproto);
+
+	nni_stat_init_atomic(&st->s_eauth, "autherr", "auth errors");
+	nni_stat_append(root, &st->s_eauth);
+
+	nni_stat_init_atomic(&st->s_enomem, "nomem", "out of memory");
+	nni_stat_append(root, &st->s_enomem);
+
+	nni_stat_init_atomic(&st->s_reject, "reject", "pipes rejected");
+	nni_stat_append(root, &st->s_reject);
+}
+
+void
+nni_listener_bump_error(nni_listener *l, int err)
+{
+	switch (err) {
+	case NNG_ECONNABORTED:
+	case NNG_ECONNRESET:
+		BUMPSTAT(&l->l_stats.s_discon);
+		break;
+	case NNG_ECANCELED:
+		BUMPSTAT(&l->l_stats.s_canceled);
+		break;
+	case NNG_ETIMEDOUT:
+		BUMPSTAT(&l->l_stats.s_etimedout);
+		break;
+	case NNG_EPROTO:
+		BUMPSTAT(&l->l_stats.s_eproto);
+		break;
+	case NNG_EPEERAUTH:
+	case NNG_ECRYPTO:
+		BUMPSTAT(&l->l_stats.s_eauth);
+		break;
+	case NNG_ENOMEM:
+		BUMPSTAT(&l->l_stats.s_enomem);
+		break;
+	default:
+		BUMPSTAT(&l->l_stats.s_othererr);
+		break;
+	}
 }
 
 int
@@ -297,24 +330,19 @@ listener_accept_cb(void *arg)
 		break;
 	case NNG_ECONNABORTED: // remote condition, no cooldown
 	case NNG_ECONNRESET:   // remote condition, no cooldown
-		BUMPSTAT(&l->l_stats.s_aborted);
 		listener_accept_start(l);
 		break;
 	case NNG_ETIMEDOUT:
 		// No need to sleep since we timed out already.
-		BUMPSTAT(&l->l_stats.s_timedout);
 		listener_accept_start(l);
 		break;
 	case NNG_EPEERAUTH: // peer validation failure
-		BUMPSTAT(&l->l_stats.s_othererr);
 		listener_accept_start(l);
 		break;
 	case NNG_ECLOSED:   // no further action
 	case NNG_ECANCELED: // no further action
-		BUMPSTAT(&l->l_stats.s_canceled);
 		break;
 	default:
-		BUMPSTAT(&l->l_stats.s_othererr);
 		// We don't really know why we failed, but we backoff
 		// here. This is because errors here are probably due
 		// to system failures (resource exhaustion) and we hope
@@ -361,13 +389,20 @@ nni_listener_sock(nni_listener *l)
 }
 
 int
-nni_listener_setopt(nni_listener *l, const char *name, const void *val,
-    size_t sz, nni_opt_type t)
+nni_listener_setopt(
+    nni_listener *l, const char *name, const void *val, size_t sz, nni_type t)
 {
-	nni_tran_option *o;
+	nni_option *o;
 
 	if (strcmp(name, NNG_OPT_URL) == 0) {
 		return (NNG_EREADONLY);
+	}
+
+	if (l->l_ops.l_setopt != NULL) {
+		int rv = l->l_ops.l_setopt(l->l_data, name, val, sz, t);
+		if (rv != NNG_ENOTSUP) {
+			return (rv);
+		}
 	}
 
 	for (o = l->l_ops.l_options; o && o->o_name; o++) {
@@ -386,9 +421,16 @@ nni_listener_setopt(nni_listener *l, const char *name, const void *val,
 
 int
 nni_listener_getopt(
-    nni_listener *l, const char *name, void *valp, size_t *szp, nni_opt_type t)
+    nni_listener *l, const char *name, void *valp, size_t *szp, nni_type t)
 {
-	nni_tran_option *o;
+	nni_option *o;
+
+	if (l->l_ops.l_getopt != NULL) {
+		int rv = l->l_ops.l_getopt(l->l_data, name, valp, szp, t);
+		if (rv != NNG_ENOTSUP) {
+			return (rv);
+		}
+	}
 
 	for (o = l->l_ops.l_options; o && o->o_name; o++) {
 		if (strcmp(o->o_name, name) != 0) {

@@ -8,22 +8,20 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-
-#include "nng.h"
-
-#include "protocol/pair1/pair.h"
-#include "supplemental/tls/tls.h"
-#include "transport/tls/tls.h"
-
-#include "trantest.h"
-
-#include "stubs.h"
-// TCP tests.
+// TLS tests.
 
 #ifndef _WIN32
 #include <arpa/inet.h>
 #endif
+
+#include <nng/nng.h>
+#include <nng/protocol/pair1/pair.h>
+#include <nng/supplemental/tls/tls.h>
+#include <nng/transport/tls/tls.h>
+
+#include "convey.h"
+#include "stubs.h"
+#include "trantest.h"
 
 // These keys are for demonstration purposes ONLY.  DO NOT USE.
 // The certificate is valid for 100 years, because I don't want to
@@ -322,7 +320,6 @@ TestMain("TLS Transport", {
 		nng_listener l;
 		nng_dialer   d;
 		char *       addr;
-		size_t       sz;
 
 		So(nng_tls_register() == 0);
 		So(nng_pair_open(&s1) == 0);
@@ -334,7 +331,6 @@ TestMain("TLS Transport", {
 		So(nng_listener_create(&l, s1, "tls+tcp://127.0.0.1:0") == 0);
 		So(init_listener_tls(l) == 0);
 		So(nng_listener_start(l, 0) == 0);
-		sz = NNG_MAXADDRLEN;
 		So(nng_listener_getopt_string(l, NNG_OPT_URL, &addr) == 0);
 		So(nng_dialer_create(&d, s2, addr) == 0);
 		So(init_dialer_tls(d) == 0);

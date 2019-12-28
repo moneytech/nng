@@ -8,21 +8,20 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "nng.h"
-
-#include "protocol/bus0/bus.h"
-#include "protocol/reqrep0/rep.h"
-#include "protocol/reqrep0/req.h"
-#include "supplemental/util/platform.h"
-#include "transport/inproc/inproc.h"
-#include "transport/ipc/ipc.h"
-#include "transport/tcp/tcp.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
+#include <nng/nng.h>
+#include <nng/protocol/bus0/bus.h>
+#include <nng/protocol/reqrep0/rep.h>
+#include <nng/protocol/reqrep0/req.h>
+#include <nng/supplemental/util/platform.h>
+#include <nng/transport/inproc/inproc.h>
+#include <nng/transport/ipc/ipc.h>
+#include <nng/transport/tcp/tcp.h>
+
+#include "convey.h"
 #include "stubs.h"
 
 #ifdef NDEBUG
@@ -40,20 +39,14 @@ char ipc_template[]    = "ipc:///tmp/nng_reqstress_%d";
 char ws_template[]     = "ws://127.0.0.1:%d/nng_reqstress";
 
 char *templates[] = {
-#ifdef NNG_TRANSPORT_TCP
 	tcp4_template,
-#endif
 // It would be nice to test TCPv6, but CI doesn't support it.
 // Outside of CI, it does seem to work though.
 #ifdef NNG_TEST_TCPV6
 	tcp6_template,
 #endif
-#ifdef NNG_TRANSPORT_INPROC
 	inproc_template,
-#endif
-#ifdef NNG_TRANSPORT_IPC
 	ipc_template,
-#endif
 #ifdef NNG_TRANSPORT_WS
 	ws_template,
 #endif

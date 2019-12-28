@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -16,22 +16,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nng.h"
-#include "protocol/bus0/bus.h"
-#include "protocol/pair0/pair.h"
-#include "protocol/pair1/pair.h"
-#include "protocol/pipeline0/pull.h"
-#include "protocol/pipeline0/push.h"
-#include "protocol/pubsub0/pub.h"
-#include "protocol/pubsub0/sub.h"
-#include "protocol/reqrep0/rep.h"
-#include "protocol/reqrep0/req.h"
-#include "protocol/survey0/respond.h"
-#include "protocol/survey0/survey.h"
-#include "supplemental/tls/tls.h"
-#include "supplemental/util/options.h"
-#include "supplemental/util/platform.h"
-#include "transport/zerotier/zerotier.h"
+#include <nng/nng.h>
+#include <nng/protocol/bus0/bus.h>
+#include <nng/protocol/pair0/pair.h>
+#include <nng/protocol/pair1/pair.h>
+#include <nng/protocol/pipeline0/pull.h>
+#include <nng/protocol/pipeline0/push.h>
+#include <nng/protocol/pubsub0/pub.h>
+#include <nng/protocol/pubsub0/sub.h>
+#include <nng/protocol/reqrep0/rep.h>
+#include <nng/protocol/reqrep0/req.h>
+#include <nng/protocol/survey0/respond.h>
+#include <nng/protocol/survey0/survey.h>
+#include <nng/supplemental/tls/tls.h>
+#include <nng/supplemental/util/options.h>
+#include <nng/supplemental/util/platform.h>
+#include <nng/transport/zerotier/zerotier.h>
 
 // Globals.  We need this to avoid passing around everything.
 int          format    = 0;
@@ -135,6 +135,8 @@ static nng_optspec opts[] = {
 	{ .o_name = "hex", .o_val = OPT_HEX },
 	{ .o_name = "compat", .o_val = OPT_COMPAT },
 	{ .o_name = "async", .o_val = OPT_ASYNC },
+	{ .o_name = "msgpack", .o_val = OPT_MSGPACK },
+
 	{
 	    .o_name  = "recv-maxsz",
 	    .o_short = 'Z',
@@ -307,7 +309,7 @@ static void
 loadfile(const char *path, void **datap, size_t *lenp)
 {
 	FILE * f;
-	char * data;
+	char * fdata;
 	size_t len;
 
 	if ((f = fopen(path, "r")) == NULL) {
@@ -318,16 +320,16 @@ loadfile(const char *path, void **datap, size_t *lenp)
 	}
 	len = ftell(f);
 	(void) fseek(f, 0, SEEK_SET);
-	if ((data = malloc(len + 1)) == NULL) {
+	if ((fdata = malloc(len + 1)) == NULL) {
 		fatal("Out of memory.");
 	}
-	data[len] = '\0';
+	fdata[len] = '\0';
 
-	if (fread(data, 1, len, f) != len) {
+	if (fread(fdata, 1, len, f) != len) {
 		fatal("Read file %s failed: %s", path, strerror(errno));
 	}
 	fclose(f);
-	*datap = data;
+	*datap = fdata;
 	*lenp  = len;
 }
 
@@ -858,6 +860,8 @@ main(int ac, char **av)
 	case NNG_ENOARG:
 		fatal("Option %s requires argument.", av[idx]);
 		break;
+	default:
+	        break;
 	}
 
 	if (addrs == NULL) {
@@ -887,7 +891,7 @@ main(int ac, char **av)
 	}
 	if (proto == OPT_SUB0) {
 		if (topics == NULL) {
-			topicend = addtopic(topicend, ""); // subscribe to all
+			(void) addtopic(topicend, ""); // subscribe to all
 		}
 	} else {
 		if (topics != NULL) {
@@ -938,6 +942,9 @@ main(int ac, char **av)
 			      "--file or --data.");
 		}
 		break;
+	default:
+	        // Will be caught in next switch statement.
+	        break;
 	}
 
 	switch (proto) {

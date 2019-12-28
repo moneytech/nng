@@ -8,23 +8,31 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "trantest.h"
+// Basic HTTP client tests.
 
 #ifndef _WIN32
 #include <arpa/inet.h>
 #endif
 
-// Basic HTTP client tests.
+#include <nng/nng.h>
+#include <nng/supplemental/http/http.h>
+#include <nng/supplemental/tls/tls.h>
+
 #include "core/nng_impl.h"
-#include "supplemental/http/http.h"
+
 #include "supplemental/sha1/sha1.c"
 #include "supplemental/sha1/sha1.h"
-#include "supplemental/tls/tls.h"
 
-const uint8_t example_sum[20] = { 0x0e, 0x97, 0x3b, 0x59, 0xf4, 0x76, 0x00,
-	0x7f, 0xd1, 0x0f, 0x87, 0xf3, 0x47, 0xc3, 0x95, 0x60, 0x65, 0x51, 0x6f,
-	0xc0 };
+#include "convey.h"
+#include "trantest.h"
+
+const uint8_t example_sum[20] = { 0x4a, 0x3c, 0xe8, 0xee, 0x11, 0xe0, 0x91,
+	0xdd, 0x79, 0x23, 0xf4, 0xd8, 0xc6, 0xe5, 0xb5, 0xe4, 0x1e, 0xc7, 0xc0,
+	0x47 };
+
+const uint8_t chunked_sum[20] = { 0x9b, 0x06, 0xfb, 0xee, 0x51, 0xc6, 0x42,
+	0x69, 0x1c, 0xb3, 0xaa, 0x38, 0xce, 0xb8, 0x0b, 0x3a, 0xc8, 0x3b, 0x96,
+	0x68 };
 
 TestMain("HTTP Client", {
 	atexit(nng_fini);
@@ -148,23 +156,6 @@ TestMain("HTTP Client", {
 			So(memcmp(digest, example_sum, 20) == 0);
 		});
 
-		Convey("Timeout works", {
-			nng_http_req *req;
-			nng_http_res *res;
-
-			So(nng_http_req_alloc(&req, url) == 0);
-			So(nng_http_res_alloc(&res) == 0);
-			Reset({
-				nng_http_req_free(req);
-				nng_http_res_free(res);
-			});
-
-			nng_aio_set_timeout(aio, 1); // 1 ms, should timeout!
-			nng_http_client_transact(cli, req, res, aio);
-			nng_aio_wait(aio);
-			So(nng_aio_result(aio) == NNG_ETIMEDOUT);
-		});
-
 		Convey("Connection reuse works", {
 			nng_http_req * req;
 			nng_http_res * res1;
@@ -206,6 +197,80 @@ TestMain("HTTP Client", {
 			nng_http_res_get_data(res2, &data, &len);
 			nni_sha1(data, len, digest);
 			So(memcmp(digest, example_sum, 20) == 0);
+		});
+	});
+
+	Convey("Client times out", {
+		nng_aio *        aio;
+		nng_http_client *cli;
+		nng_url *        url;
+		nng_http_req *   req;
+		nng_http_res *   res;
+
+		So(nng_aio_alloc(&aio, NULL, NULL) == 0);
+
+		So(nng_url_parse(&url, "http://httpbin.org/delay/30") == 0);
+
+		So(nng_http_client_alloc(&cli, url) == 0);
+		So(nng_http_req_alloc(&req, url) == 0);
+		So(nng_http_res_alloc(&res) == 0);
+
+		Reset({
+			nng_http_client_free(cli);
+			nng_url_free(url);
+			nng_aio_free(aio);
+			nng_http_req_free(req);
+			nng_http_res_free(res);
+		});
+		nng_aio_set_timeout(aio, 10); // 10 msec timeout
+
+		nng_http_client_transact(cli, req, res, aio);
+		nng_aio_wait(aio);
+		So(nng_aio_result(aio) == NNG_ETIMEDOUT);
+	});
+
+	Convey("Given a client (chunked)", {
+		nng_aio *        aio;
+		nng_http_client *cli;
+		nng_url *        url;
+
+		So(nng_aio_alloc(&aio, NULL, NULL) == 0);
+
+		So(nng_url_parse(&url,
+		       "http://anglesharp.azurewebsites.net/Chunked") == 0);
+		//		       "https://jigsaw.w3.org/HTTP/ChunkedScript")
+		//== 0);
+
+		So(nng_http_client_alloc(&cli, url) == 0);
+		nng_aio_set_timeout(aio, 10000); // 10 sec timeout
+
+		Reset({
+			nng_http_client_free(cli);
+			nng_url_free(url);
+			nng_aio_free(aio);
+		});
+
+		Convey("One off exchange works", {
+			nng_http_req *req;
+			nng_http_res *res;
+			void *        data;
+			size_t        len;
+			uint8_t       digest[20];
+
+			So(nng_http_req_alloc(&req, url) == 0);
+			So(nng_http_res_alloc(&res) == 0);
+			Reset({
+				nng_http_req_free(req);
+				nng_http_res_free(res);
+			});
+
+			nng_http_client_transact(cli, req, res, aio);
+			nng_aio_wait(aio);
+			So(nng_aio_result(aio) == 0);
+			So(nng_http_res_get_status(res) == 200);
+			nng_http_res_get_data(res, &data, &len);
+			nni_sha1(data, len, digest);
+			So(memcmp(digest, chunked_sum, 20) == 0);
 		});
 	});
 })

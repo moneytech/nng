@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/pair0/pair.h"
+#include "nng/protocol/pair0/pair.h"
 
 // Pair protocol.  The PAIR protocol is a simple 1:1 messaging pattern.
 // While a peer is connected to the server, all other peer connection
@@ -269,7 +269,7 @@ static nni_proto_pipe_ops pair0_pipe_ops = {
 	.pipe_stop  = pair0_pipe_stop,
 };
 
-static nni_proto_option pair0_sock_options[] = {
+static nni_option pair0_sock_options[] = {
 	// terminate list
 	{
 	    .o_name = NULL,

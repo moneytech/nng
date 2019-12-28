@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/pipeline0/pull.h"
+#include "nng/protocol/pipeline0/pull.h"
 
 // Pull protocol.  The PULL protocol is the "read" side of a pipeline.
 
@@ -216,7 +216,7 @@ static nni_proto_pipe_ops pull0_pipe_ops = {
 	.pipe_stop  = pull0_pipe_stop,
 };
 
-static nni_proto_option pull0_sock_options[] = {
+static nni_option pull0_sock_options[] = {
 	// terminate list
 	{
 	    .o_name = NULL,

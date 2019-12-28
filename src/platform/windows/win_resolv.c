@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -22,15 +22,15 @@
 // host file, WINS, or other naming services.  As a result, we just build
 // our own limited asynchronous resolver with threads.
 
-#ifndef NNG_WIN_RESOLV_CONCURRENCY
-#define NNG_WIN_RESOLV_CONCURRENCY 4
+#ifndef NNG_RESOLV_CONCURRENCY
+#define NNG_RESOLV_CONCURRENCY 4
 #endif
 
 static nni_mtx  resolv_mtx;
 static nni_cv   resolv_cv;
 static bool     resolv_fini;
 static nni_list resolv_aios;
-static nni_thr  resolv_thrs[NNG_WIN_RESOLV_CONCURRENCY];
+static nni_thr  resolv_thrs[NNG_RESOLV_CONCURRENCY];
 
 typedef struct resolv_item resolv_item;
 struct resolv_item {
@@ -134,25 +134,27 @@ resolv_task(resolv_item *item)
 		}
 	}
 
-	if (probe != NULL) {
+	if ((probe != NULL) && (item->aio != NULL)) {
 		struct sockaddr_in * sin;
 		struct sockaddr_in6 *sin6;
-		nni_sockaddr *       sa = &item->sa;
+		nni_sockaddr         sa;
 
 		switch (probe->ai_addr->sa_family) {
 		case AF_INET:
-			rv                 = 0;
-			sin                = (void *) probe->ai_addr;
-			sa->s_in.sa_family = NNG_AF_INET;
-			sa->s_in.sa_port   = item->port;
-			sa->s_in.sa_addr   = sin->sin_addr.s_addr;
+			rv                = 0;
+			sin               = (void *) probe->ai_addr;
+			sa.s_in.sa_family = NNG_AF_INET;
+			sa.s_in.sa_port   = item->port;
+			sa.s_in.sa_addr   = sin->sin_addr.s_addr;
+			nni_aio_set_sockaddr(item->aio, &sa);
 			break;
 		case AF_INET6:
-			rv                  = 0;
-			sin6                = (void *) probe->ai_addr;
-			sa->s_in6.sa_family = NNG_AF_INET6;
-			sa->s_in6.sa_port   = item->port;
-			memcpy(sa->s_in6.sa_addr, sin6->sin6_addr.s6_addr, 16);
+			rv                 = 0;
+			sin6               = (void *) probe->ai_addr;
+			sa.s_in6.sa_family = NNG_AF_INET6;
+			sa.s_in6.sa_port   = item->port;
+			memcpy(sa.s_in6.sa_addr, sin6->sin6_addr.s6_addr, 16);
+			nni_aio_set_sockaddr(item->aio, &sa);
 			break;
 		}
 	}
@@ -294,57 +296,15 @@ resolv_worker(void *notused)
 
 		// Check to make sure we were not canceled.
 		if ((aio = item->aio) != NULL) {
-			nng_sockaddr *sa = nni_aio_get_input(aio, 0);
 			nni_aio_set_prov_extra(aio, 0, NULL);
 			item->aio = NULL;
-			memcpy(sa, &item->sa, sizeof(*sa));
+
 			nni_aio_finish(aio, rv, 0);
 
 			NNI_FREE_STRUCT(item);
 		}
 	}
 	nni_mtx_unlock(&resolv_mtx);
-}
-
-int
-nni_ntop(const nni_sockaddr *sa, char *ipstr, char *portstr)
-{
-	void *   ap;
-	uint16_t port;
-	int      af;
-	switch (sa->s_family) {
-	case NNG_AF_INET:
-		ap   = (void *) &sa->s_in.sa_addr;
-		port = sa->s_in.sa_port;
-		af   = AF_INET;
-		break;
-	case NNG_AF_INET6:
-		ap   = (void *) &sa->s_in6.sa_addr;
-		port = sa->s_in6.sa_port;
-		af   = AF_INET6;
-		break;
-	default:
-		return (NNG_EINVAL);
-	}
-	if (ipstr != NULL) {
-		if (af == AF_INET6) {
-			size_t l;
-			ipstr[0] = '[';
-			InetNtopA(af, ap, ipstr + 1, INET6_ADDRSTRLEN);
-			l          = strlen(ipstr);
-			ipstr[l++] = ']';
-			ipstr[l++] = '\0';
-		} else {
-			InetNtopA(af, ap, ipstr, INET6_ADDRSTRLEN);
-		}
-	}
-	if (portstr != NULL) {
-#ifdef NNG_LITTLE_ENDIAN
-		port = ((port >> 8) & 0xff) | ((port & 0xff) << 8);
-#endif
-		snprintf(portstr, 6, "%u", port);
-	}
-	return (0);
 }
 
 int
@@ -355,14 +315,14 @@ nni_win_resolv_sysinit(void)
 	nni_aio_list_init(&resolv_aios);
 
 	resolv_fini = false;
-	for (int i = 0; i < NNG_WIN_RESOLV_CONCURRENCY; i++) {
+	for (int i = 0; i < NNG_RESOLV_CONCURRENCY; i++) {
 		int rv = nni_thr_init(&resolv_thrs[i], resolv_worker, NULL);
 		if (rv != 0) {
 			nni_win_resolv_sysfini();
 			return (rv);
 		}
 	}
-	for (int i = 0; i < NNG_WIN_RESOLV_CONCURRENCY; i++) {
+	for (int i = 0; i < NNG_RESOLV_CONCURRENCY; i++) {
 		nni_thr_run(&resolv_thrs[i]);
 	}
 	return (0);
@@ -375,7 +335,7 @@ nni_win_resolv_sysfini(void)
 	resolv_fini = true;
 	nni_cv_wake(&resolv_cv);
 	nni_mtx_unlock(&resolv_mtx);
-	for (int i = 0; i < NNG_WIN_RESOLV_CONCURRENCY; i++) {
+	for (int i = 0; i < NNG_RESOLV_CONCURRENCY; i++) {
 		nni_thr_fini(&resolv_thrs[i]);
 	}
 	nni_cv_fini(&resolv_cv);

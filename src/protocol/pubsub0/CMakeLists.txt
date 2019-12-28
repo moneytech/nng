@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -9,16 +9,16 @@
 #
 
 #  Pub/Sub protocol
+option (NNG_PROTO_PUB0 "Enable PUBv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_PUB0)
 
-if (NNG_PROTO_PUB0)
-    set(PUB0_SOURCES protocol/pubsub0/pub.c protocol/pubsub0/pub.h)
-    set(PUB0_HEADERS protocol/pubsub0/pub.h)
-endif()
+option (NNG_PROTO_SUB0 "Enable SUBv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_SUB0)
 
-if (NNG_PROTO_SUB0)
-    set(SUB0_SOURCES protocol/pubsub0/sub.c protocol/pubsub0/sub.h)
-    set(SUB0_HEADERS protocol/pubsub0/sub.h)
-endif()
+nng_sources_if(NNG_PROTO_PUB0 pub.c)
+nng_headers_if(NNG_PROTO_PUB0 nng/protocol/pubsub0/pub.h)
+nng_defines_if(NNG_PROTO_PUB0 NNG_HAVE_PUB0)
 
-set(NNG_SOURCES ${NNG_SOURCES} ${PUB0_SOURCES} ${SUB0_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${PUB0_HEADERS} ${SUB0_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_PROTO_SUB0 sub.c xsub.c)
+nng_headers_if(NNG_PROTO_SUB0 nng/protocol/pubsub0/sub.h)
+nng_defines_if(NNG_PROTO_SUB0 NNG_HAVE_SUB0)

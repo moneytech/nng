@@ -8,12 +8,12 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "nng.h"
-#include "protocol/pair0/pair.h"
-#include "transport/zerotier/zerotier.h"
-#include "trantest.h"
+#include <nng/nng.h>
+#include <nng/protocol/pair0/pair.h>
+#include <nng/transport/zerotier/zerotier.h>
 
+#include "convey.h"
+#include "trantest.h"
 #include "stubs.h"
 
 // zerotier tests.
@@ -287,7 +287,8 @@ TestMain("ZeroTier Transport", {
 	So(nng_listener_create(&l_test, s_test, "zt://*." NWID ":0") == 0);
 	So(nng_listener_start(l_test, 0) == 0);
 	So(nng_listener_getopt_uint64(l_test, NNG_OPT_ZT_NODE, &node) == 0);
-	snprintf(fmt, sizeof(fmt), "zt://%llx." NWID ":%%u", node);
+	snprintf(fmt, sizeof(fmt), "zt://%llx." NWID ":%%u",
+	    (unsigned long long) node);
 	nng_listener_close(l_test);
 
 	trantest_test_extended(fmt, check_props);

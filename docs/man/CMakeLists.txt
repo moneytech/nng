@@ -1,6 +1,7 @@
 #
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Devolutions <info@devolutions.net>
 #
 # This software is supplied under the terms of the MIT License, a
 # copy of which should be located in the distribution where this
@@ -83,18 +84,22 @@ if (NNG_ENABLE_DOC)
 	nng_bus_open
 	nng_close
 	nng_ctx_close
+	nng_ctx_get
 	nng_ctx_getopt
 	nng_ctx_id
 	nng_ctx_open
 	nng_ctx_recv
 	nng_ctx_send
+	nng_ctx_set
 	nng_ctx_setopt
 	nng_device
 	nng_dial
 	nng_dialer_close
 	nng_dialer_create
+	nng_dialer_get
 	nng_dialer_getopt
 	nng_dialer_id
+	nng_dialer_set
 	nng_dialer_setopt
 	nng_dialer_start
 	nng_free
@@ -104,8 +109,10 @@ if (NNG_ENABLE_DOC)
 	nng_listen
 	nng_listener_close
 	nng_listener_create
+	nng_listener_get
 	nng_listener_getopt
 	nng_listener_id
+	nng_listener_set
 	nng_listener_setopt
 	nng_listener_start
 	nng_msg_alloc
@@ -131,6 +138,7 @@ if (NNG_ENABLE_DOC)
 	nng_pair_open
 	nng_pipe_close
 	nng_pipe_dialer
+	nng_pipe_get
 	nng_pipe_getopt
 	nng_pipe_id
 	nng_pipe_listener
@@ -151,6 +159,8 @@ if (NNG_ENABLE_DOC)
 	nng_setopt
 	nng_sleep_aio
 	nng_socket_id
+	nng_socket_get
+	nng_socket_set
 	nng_stats_free
 	nng_stats_get
 	nng_stat_child
@@ -290,6 +300,28 @@ if (NNG_ENABLE_DOC)
 	nng_thread_destroy
     )
 
+    set(NNG_MAN3STR
+        nng_stream_close
+	nng_stream_free
+	nng_stream_get
+	nng_stream_recv
+	nng_stream_send
+	nng_stream_set
+    	nng_stream_dialer_alloc
+	nng_stream_dialer_close
+	nng_stream_dialer_dial
+	nng_stream_dialer_free
+	nng_stream_dialer_get
+	nng_stream_dialer_set
+	nng_stream_listener_accept
+	nng_stream_listener_alloc
+	nng_stream_listener_close
+	nng_stream_listener_free
+	nng_stream_listener_get
+	nng_stream_listener_listen
+	nng_stream_listener_set
+    )
+
     set(NNG_MAN3TLS
 	nng_tls_config_alloc
 	nng_tls_config_auth_mode
@@ -297,6 +329,7 @@ if (NNG_ENABLE_DOC)
 	nng_tls_config_ca_file
 	nng_tls_config_cert_key_file
 	nng_tls_config_free
+	nng_tls_config_hold
 	nng_tls_config_own_cert
 	nng_tls_config_server_name
     )
@@ -319,6 +352,15 @@ if (NNG_ENABLE_DOC)
 	nng_sockaddr_zt
 	nng_socket
 	nng_stat
+
+	nng_stream
+	nng_stream_dialer
+	nng_stream_listener
+
+	nng_tcp_options
+	nng_ipc_options
+	nng_tls_config
+	nng_tls_options
     )
 
     set(NNG_MAN7
@@ -355,6 +397,10 @@ if (NNG_ENABLE_DOC)
 
     foreach(F ${NNG_MAN3HTTP})
         nng_man(${F} 3http)
+    endforeach()
+
+    foreach(F ${NNG_MAN3STR})
+        nng_man(${F} 3str)
     endforeach()
 
     foreach(F ${NNG_MAN3SUPP})

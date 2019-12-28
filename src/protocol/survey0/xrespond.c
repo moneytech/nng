@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/survey0/respond.h"
+#include "nng/protocol/survey0/respond.h"
 
 // Respondent protocol.  The RESPONDENT protocol is the "replier" side of
 // the surveyor pattern.  This is useful for building service discovery, or
@@ -385,10 +385,9 @@ static nni_proto_pipe_ops xresp0_pipe_ops = {
 	.pipe_stop  = xresp0_pipe_stop,
 };
 
-static nni_proto_option xresp0_sock_options[] = {
+static nni_option xresp0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = xresp0_sock_get_maxttl,
 	    .o_set  = xresp0_sock_set_maxttl,
 	},

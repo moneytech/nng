@@ -26,8 +26,7 @@ int nng_close(nng_socket s);
 
 The `nng_close()` function closes the supplied socket, _s_.
 Messages that have been submitted for sending may be flushed or delivered,
-depending upon the transport and the setting of the
-`<<nng_options.5#NNG_OPT_LINGER,NNG_OPT_LINGER>>` option.
+depending upon the transport.
 
 Further attempts to use the socket after this call returns will result
 in `NNG_ECLOSED`.
@@ -39,7 +38,7 @@ of that data.
 There is no automatic linger or flush to ensure that the socket send buffers
 have completely transmitted.
 It is recommended to wait a brief period after calling
-`<<nng_send.3#,nng_send()>>` or similar functions, before calling this
+xref:nng_send.3.adoc[`nng_send()`] or similar functions, before calling this
 function.
 
 == RETURN VALUES
@@ -54,7 +53,7 @@ This function returns 0 on success, and non-zero otherwise.
 == SEE ALSO
 
 [.text-left]
-<<nng_strerror.3#,nng_strerror(3)>>,
-<<nng_options.5#,nng_options(5)>>,
-<<nng_socket.5#,nng_socket(5)>>,
-<<nng.7#,nng(7)>>
+xref:nng_strerror.3.adoc[nng_strerror(3)],
+xref:nng_options.5.adoc[nng_options(5)],
+xref:nng_socket.5.adoc[nng_socket(5)],
+xref:nng.7.adoc[nng(7)]

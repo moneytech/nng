@@ -1,6 +1,7 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
+// Copyright 2019 Devolutions <info@devolutions.net>
 //
 // This software is supplied under the terms of the MIT License, a
 // copy of which should be located in the distribution where this
@@ -14,25 +15,20 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "supplemental/tls/tls.h"
 #include "supplemental/tls/tls_api.h"
+
+#include <nng/supplemental/tls/tls.h>
 
 #include "http_api.h"
 
 static nni_mtx http_txn_lk;
 
 struct nng_http_client {
-	nni_list        aios;
-	nni_mtx         mtx;
-	bool            closed;
-	bool            resolving;
-	nng_tls_config *tls;
-	nni_aio *       aio;
-	nng_sockaddr    sa;
-	nni_tcp_dialer *dialer;
-	char *          host;
-	char *          port;
-	nni_url *       url;
+	nni_list           aios;
+	nni_mtx            mtx;
+	bool               closed;
+	nni_aio *          aio;
+	nng_stream_dialer *dialer;
 };
 
 static void
@@ -43,9 +39,7 @@ http_dial_start(nni_http_client *c)
 	if ((aio = nni_list_first(&c->aios)) == NULL) {
 		return;
 	}
-	c->resolving = true;
-	nni_aio_set_input(c->aio, 0, &c->sa);
-	nni_tcp_resolv(c->host, c->port, NNG_AF_UNSPEC, 0, c->aio);
+	nng_stream_dialer_dial(c->dialer, c->aio);
 }
 
 static void
@@ -54,7 +48,7 @@ http_dial_cb(void *arg)
 	nni_http_client *c = arg;
 	nni_aio *        aio;
 	int              rv;
-	nni_tcp_conn *   tcp;
+	nng_stream *     stream;
 	nni_http_conn *  conn;
 
 	nni_mtx_lock(&c->mtx);
@@ -63,9 +57,9 @@ http_dial_cb(void *arg)
 	if ((aio = nni_list_first(&c->aios)) == NULL) {
 		// User abandoned request, and no residuals left.
 		nni_mtx_unlock(&c->mtx);
-		if ((rv == 0) && !c->resolving) {
-			tcp = nni_aio_get_output(c->aio, 0);
-			nni_tcp_conn_fini(tcp);
+		if (rv == 0) {
+			stream = nni_aio_get_output(c->aio, 0);
+			nng_stream_free(stream);
 		}
 		return;
 	}
@@ -78,28 +72,16 @@ http_dial_cb(void *arg)
 		return;
 	}
 
-	if (c->resolving) {
-		// This was a DNS lookup -- advance to normal TCP connect.
-		c->resolving = false;
-		nni_tcp_dialer_dial(c->dialer, &c->sa, c->aio);
-		nni_mtx_unlock(&c->mtx);
-		return;
-	}
-
 	nni_aio_list_remove(aio);
-	tcp = nni_aio_get_output(c->aio, 0);
-	NNI_ASSERT(tcp != NULL);
+	stream = nni_aio_get_output(c->aio, 0);
+	NNI_ASSERT(stream != NULL);
 
-	if (c->tls != NULL) {
-		rv = nni_http_conn_init_tls(&conn, c->tls, tcp);
-	} else {
-		rv = nni_http_conn_init_tcp(&conn, tcp);
-	}
+	rv = nni_http_conn_init(&conn, stream);
 	http_dial_start(c);
 	nni_mtx_unlock(&c->mtx);
 
 	if (rv != 0) {
-		// the conn_init function will have already discard tcp.
+		// the conn_init function will have already discard stream.
 		nni_aio_finish_error(aio, rv);
 		return;
 	}
@@ -112,16 +94,8 @@ void
 nni_http_client_fini(nni_http_client *c)
 {
 	nni_aio_fini(c->aio);
-	nni_tcp_dialer_fini(c->dialer);
+	nng_stream_dialer_free(c->dialer);
 	nni_mtx_fini(&c->mtx);
-#ifdef NNG_SUPP_TLS
-	if (c->tls != NULL) {
-		nni_tls_config_fini(c->tls);
-	}
-#endif
-	nni_strfree(c->host);
-	nni_strfree(c->port);
-
 	NNI_FREE_STRUCT(c);
 }
 
@@ -130,17 +104,22 @@ nni_http_client_init(nni_http_client **cp, const nni_url *url)
 {
 	int              rv;
 	nni_http_client *c;
+	nng_url          myurl;
+
+	// Rewrite URLs to either TLS or TCP.
+	memcpy(&myurl, url, sizeof(myurl));
+	if ((strcmp(url->u_scheme, "http") == 0) ||
+	    (strcmp(url->u_scheme, "ws") == 0)) {
+		myurl.u_scheme = "tcp";
+	} else if ((strcmp(url->u_scheme, "https") == 0) ||
+	    (strcmp(url->u_scheme, "wss") == 0)) {
+		myurl.u_scheme = "tls+tcp";
+	} else {
+		return (NNG_EADDRINVAL);
+	}
 
 	if (strlen(url->u_hostname) == 0) {
 		// We require a valid hostname.
-		return (NNG_EADDRINVAL);
-	}
-	if ((strcmp(url->u_scheme, "http") != 0) &&
-#ifdef NNG_SUPP_TLS
-	    (strcmp(url->u_scheme, "https") != 0) &&
-	    (strcmp(url->u_scheme, "wss") != 0) &&
-#endif
-	    (strcmp(url->u_scheme, "ws") != 0)) {
 		return (NNG_EADDRINVAL);
 	}
 
@@ -149,40 +128,13 @@ nni_http_client_init(nni_http_client **cp, const nni_url *url)
 	}
 	nni_mtx_init(&c->mtx);
 	nni_aio_list_init(&c->aios);
-	if (((c->host = nni_strdup(url->u_hostname)) == NULL) ||
-	    ((strlen(url->u_port) != 0) &&
-	        ((c->port = nni_strdup(url->u_port)) == NULL))) {
+
+	if ((rv = nng_stream_dialer_alloc_url(&c->dialer, &myurl)) != 0) {
 		nni_http_client_fini(c);
-		return (NNG_ENOMEM);
+		return (rv);
 	}
 
-#ifdef NNG_SUPP_TLS
-	if ((strcmp(url->u_scheme, "https") == 0) ||
-	    (strcmp(url->u_scheme, "wss") == 0)) {
-		rv = nni_tls_config_init(&c->tls, NNG_TLS_MODE_CLIENT);
-		if (rv != 0) {
-			nni_http_client_fini(c);
-			return (rv);
-		}
-		// Take the server name right from the client URL. We only
-		// consider the name, as the port is never part of the
-		// certificate.
-		rv = nng_tls_config_server_name(c->tls, url->u_hostname);
-		if (rv != 0) {
-			nni_http_client_fini(c);
-			return (rv);
-		}
-
-		// Note that the application has to supply the location of
-		// certificates.  We could probably use a default based
-		// on environment or common locations used by OpenSSL, but
-		// as there is no way to *unload* the cert file, lets not
-		// do that.  (We might want to consider a mode to reset.)
-	}
-#endif
-
-	if (((rv = nni_tcp_dialer_init(&c->dialer)) != 0) ||
-	    ((rv = nni_aio_init(&c->aio, http_dial_cb, c)) != 0)) {
+	if ((rv = nni_aio_init(&c->aio, http_dial_cb, c)) != 0) {
 		nni_http_client_fini(c);
 		return (rv);
 	}
@@ -192,45 +144,37 @@ nni_http_client_init(nni_http_client **cp, const nni_url *url)
 }
 
 int
-nni_http_client_set_tls(nni_http_client *c, struct nng_tls_config *tls)
+nni_http_client_set_tls(nni_http_client *c, nng_tls_config *tls)
 {
-#ifdef NNG_SUPP_TLS
-	struct nng_tls_config *old;
-	nni_mtx_lock(&c->mtx);
-	old    = c->tls;
-	c->tls = tls;
-	if (tls != NULL) {
-		nni_tls_config_hold(tls);
-	}
-	nni_mtx_unlock(&c->mtx);
-	if (old != NULL) {
-		nni_tls_config_fini(old);
-	}
-	return (0);
-#else
-	NNI_ARG_UNUSED(c);
-	NNI_ARG_UNUSED(tls);
-	return (NNG_EINVAL);
-#endif
+	int rv;
+	rv = nni_stream_dialer_setx(c->dialer, NNG_OPT_TLS_CONFIG, &tls,
+	    sizeof(tls), NNI_TYPE_POINTER);
+	return (rv);
 }
 
 int
-nni_http_client_get_tls(nni_http_client *c, struct nng_tls_config **tlsp)
+nni_http_client_get_tls(nni_http_client *c, nng_tls_config **tlsp)
 {
-#ifdef NNG_SUPP_TLS
-	nni_mtx_lock(&c->mtx);
-	if (c->tls == NULL) {
-		nni_mtx_unlock(&c->mtx);
-		return (NNG_EINVAL);
-	}
-	*tlsp = c->tls;
-	nni_mtx_unlock(&c->mtx);
-	return (0);
-#else
-	NNI_ARG_UNUSED(c);
-	NNI_ARG_UNUSED(tlsp);
-	return (NNG_ENOTSUP);
-#endif
+	size_t sz = sizeof(*tlsp);
+	int    rv;
+	rv = nni_stream_dialer_getx(
+	    c->dialer, NNG_OPT_TLS_CONFIG, tlsp, &sz, NNI_TYPE_POINTER);
+	return (rv);
+}
+
+int
+nni_http_client_setx(nni_http_client *c, const char *name, const void *buf,
+    size_t sz, nni_type t)
+{
+	// We have no local options, but we just pass them straight through.
+	return (nni_stream_dialer_setx(c->dialer, name, buf, sz, t));
+}
+
+int
+nni_http_client_getx(
+    nni_http_client *c, const char *name, void *buf, size_t *szp, nni_type t)
+{
+	return (nni_stream_dialer_getx(c->dialer, name, buf, szp, t));
 }
 
 static void
@@ -282,6 +226,7 @@ typedef enum http_txn_state {
 	HTTP_SENDING,
 	HTTP_RECVING,
 	HTTP_RECVING_BODY,
+	HTTP_RECVING_CHUNKS,
 } http_txn_state;
 
 typedef struct http_txn {
@@ -291,6 +236,7 @@ typedef struct http_txn {
 	nni_http_conn *  conn;
 	nni_http_req *   req;
 	nni_http_res *   res;
+	nni_http_chunks *chunks;
 	http_txn_state   state;
 	nni_reap_item    reap;
 } http_txn;
@@ -306,26 +252,36 @@ http_txn_reap(void *arg)
 			txn->conn = NULL;
 		}
 	}
+	nni_http_chunks_free(txn->chunks);
 	nni_aio_fini(txn->aio);
 	NNI_FREE_STRUCT(txn);
 }
 
 static void
+http_txn_finish_aios(http_txn *txn, int rv)
+{
+	nni_aio *aio;
+	while ((aio = nni_list_first(&txn->aios)) != NULL) {
+		nni_list_remove(&txn->aios, aio);
+		nni_aio_finish_error(aio, rv);
+	}
+}
+
+static void
 http_txn_cb(void *arg)
 {
-	http_txn *  txn = arg;
-	const char *str;
-	nni_aio *   aio;
-	int         rv;
-	uint64_t    len;
-	nni_iov     iov;
+	http_txn *      txn = arg;
+	const char *    str;
+	int             rv;
+	uint64_t        len;
+	nni_iov         iov;
+	char *          dst;
+	size_t          sz;
+	nni_http_chunk *chunk = NULL;
 
 	nni_mtx_lock(&http_txn_lk);
 	if ((rv = nni_aio_result(txn->aio)) != 0) {
-		while ((aio = nni_list_first(&txn->aios)) != NULL) {
-			nni_list_remove(&txn->aios, aio);
-			nni_aio_finish_error(aio, rv);
-		}
+		http_txn_finish_aios(txn, rv);
 		nni_mtx_unlock(&http_txn_lk);
 		nni_reap(&txn->reap, http_txn_reap, txn);
 		return;
@@ -345,22 +301,22 @@ http_txn_cb(void *arg)
 		return;
 
 	case HTTP_RECVING:
+
+		// Detect chunked encoding.  You poor bastard.
 		if (((str = nni_http_res_get_header(
 		          txn->res, "Transfer-Encoding")) != NULL) &&
 		    (strstr(str, "chunked") != NULL)) {
-			// We refuse to receive chunked encoding data.
-			// This is an implementation limitation, but as HTTP/2
-			// has eliminated this encoding, maybe it's not that
-			// big of a deal.  We forcibly close this.
-			while ((aio = nni_list_first(&txn->aios)) != NULL) {
-				nni_list_remove(&txn->aios, aio);
-				nni_aio_finish_error(aio, NNG_ENOTSUP);
+
+			if ((rv = nni_http_chunks_init(&txn->chunks, 0)) !=
+			    0) {
+				goto error;
 			}
-			nni_http_conn_close(txn->conn);
+			txn->state = HTTP_RECVING_CHUNKS;
+			nni_http_read_chunks(txn->conn, txn->chunks, txn->aio);
 			nni_mtx_unlock(&http_txn_lk);
-			nni_reap(&txn->reap, http_txn_reap, txn);
 			return;
 		}
+
 		str = nni_http_req_get_method(txn->req);
 		if ((nni_strcasecmp(str, "HEAD") == 0) ||
 		    ((str = nni_http_res_get_header(
@@ -368,16 +324,16 @@ http_txn_cb(void *arg)
 		    (nni_strtou64(str, &len) != 0) || (len == 0)) {
 			// If no content-length, or HEAD (which per RFC
 			// never transfers data), then we are done.
-			while ((aio = nni_list_first(&txn->aios)) != NULL) {
-				nni_list_remove(&txn->aios, aio);
-				nni_aio_finish(aio, 0, 0);
-			}
+			http_txn_finish_aios(txn, 0);
 			nni_mtx_unlock(&http_txn_lk);
 			nni_reap(&txn->reap, http_txn_reap, txn);
 			return;
 		}
 
-		nni_http_res_alloc_data(txn->res, (size_t) len);
+		if ((rv = nni_http_res_alloc_data(txn->res, (size_t) len)) !=
+		    0) {
+			goto error;
+		}
 		nni_http_res_get_data(txn->res, &iov.iov_buf, &iov.iov_len);
 		nni_aio_set_iov(txn->aio, 1, &iov);
 		txn->state = HTTP_RECVING_BODY;
@@ -387,16 +343,36 @@ http_txn_cb(void *arg)
 
 	case HTTP_RECVING_BODY:
 		// All done!
-		while ((aio = nni_list_first(&txn->aios)) != NULL) {
-			nni_list_remove(&txn->aios, aio);
-			nni_aio_finish(aio, 0, 0);
+		http_txn_finish_aios(txn, 0);
+		nni_mtx_unlock(&http_txn_lk);
+		nni_reap(&txn->reap, http_txn_reap, txn);
+		return;
+
+	case HTTP_RECVING_CHUNKS:
+		// All done, but now we need to coalesce the chunks, for
+		// yet *another* copy.  Chunked transfers are such crap.
+		sz = nni_http_chunks_size(txn->chunks);
+		if ((rv = nni_http_res_alloc_data(txn->res, sz)) != 0) {
+			goto error;
 		}
+		nni_http_res_get_data(txn->res, (void **) &dst, &sz);
+		while ((chunk = nni_http_chunks_iter(txn->chunks, chunk)) !=
+		    NULL) {
+			memcpy(dst, nni_http_chunk_data(chunk),
+			    nni_http_chunk_size(chunk));
+			dst += nni_http_chunk_size(chunk);
+		}
+		http_txn_finish_aios(txn, 0);
 		nni_mtx_unlock(&http_txn_lk);
 		nni_reap(&txn->reap, http_txn_reap, txn);
 		return;
 	}
 
-	NNI_ASSERT(0); // Unknown state!
+error:
+	http_txn_finish_aios(txn, rv);
+	nni_http_conn_close(txn->conn);
+	nni_mtx_unlock(&http_txn_lk);
+	nni_reap(&txn->reap, http_txn_reap, txn);
 }
 
 static void
@@ -489,7 +465,7 @@ nni_http_transact(nni_http_client *client, nni_http_req *req,
 	}
 
 	nni_aio_list_init(&txn->aios);
-	txn->client = NULL;
+	txn->client = client;
 	txn->conn   = NULL;
 	txn->req    = req;
 	txn->res    = res;

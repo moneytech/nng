@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/survey0/survey.h"
+#include "nng/protocol/survey0/survey.h"
 
 // Surveyor protocol.  The SURVEYOR protocol is the "survey" side of the
 // survey pattern.  This is useful for building service discovery, voting, etc.
@@ -356,10 +356,9 @@ static nni_proto_pipe_ops xsurv0_pipe_ops = {
 	.pipe_stop  = xsurv0_pipe_stop,
 };
 
-static nni_proto_option xsurv0_sock_options[] = {
+static nni_option xsurv0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = xsurv0_sock_get_maxttl,
 	    .o_set  = xsurv0_sock_set_maxttl,
 	},

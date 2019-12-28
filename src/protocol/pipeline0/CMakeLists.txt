@@ -1,5 +1,5 @@
 #
-# Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+# Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 # Copyright 2018 Capitar IT Group BV <info@capitar.com>
 #
 # This software is supplied under the terms of the MIT License, a
@@ -8,17 +8,17 @@
 # found online at https://opensource.org/licenses/MIT.
 #
 
-#  Pub/Sub protocol
+#  Pipeline protocol
+option (NNG_PROTO_PUSH0 "Enable PUSHv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_PUSH0)
 
-if (NNG_PROTO_PUSH0)
-    set(PUSH0_SOURCES protocol/pipeline0/push.c protocol/pipeline0/push.h)
-    set(PUSH0_HEADERS protocol/pipeline0/push.h)
-endif()
+option (NNG_PROTO_PULL0 "Enable PULLv0 protocol." ON)
+mark_as_advanced(NNG_PROTO_PULL0)
 
-if (NNG_PROTO_PULL0)
-    set(PULL0_SOURCES protocol/pipeline0/pull.c protocol/pipeline0/pull.h)
-    set(PULL0_HEADERS protocol/pipeline0/pull.h)
-endif()
+nng_sources_if(NNG_PROTO_PUSH0 push.c)
+nng_headers_if(NNG_PROTO_PUSH0 nng/protocol/pipeline0/push.h)
+nng_defines_if(NNG_PROTO_PUSH0 NNG_HAVE_PUSH0)
 
-set(NNG_SOURCES ${NNG_SOURCES} ${PUSH0_SOURCES} ${PULL0_SOURCES} PARENT_SCOPE)
-set(NNG_HEADERS ${NNG_HEADERS} ${PUSH0_HEADERS} ${PULL0_HEADERS} PARENT_SCOPE)
+nng_sources_if(NNG_PROTO_PULL0 pull.c)
+nng_headers_if(NNG_PROTO_PULL0 nng/protocol/pipeline0/pull.h)
+nng_defines_if(NNG_PROTO_PULL0 NNG_HAVE_PULL0)

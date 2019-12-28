@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -13,6 +13,16 @@
 #include "core/nng_impl.h"
 
 #ifdef NNG_PLATFORM_WINDOWS
+
+// mingw does not define InterlockedAddNoFence64, use the mingw equivelent
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#define InterlockedAddNoFence64(a, b) \
+	__atomic_add_fetch(a, b, __ATOMIC_RELAXED)
+#define InterlockedIncrementAcquire64(a) \
+	__atomic_add_fetch(a, 1, __ATOMIC_ACQUIRE)
+#define InterlockedDecrementRelease64(a) \
+	__atomic_fetch_sub(a, 1, __ATOMIC_RELEASE)
+#endif
 
 #include <stdlib.h>
 
@@ -122,13 +132,13 @@ nni_atomic_flag_reset(nni_atomic_flag *f)
 }
 
 void
-nni_atomic_inc64(nni_atomic_u64 *v, uint64_t bump)
+nni_atomic_add64(nni_atomic_u64 *v, uint64_t bump)
 {
 	InterlockedAddNoFence64(&v->v, (LONGLONG) bump);
 }
 
 void
-nni_atomic_dec64(nni_atomic_u64 *v, uint64_t bump)
+nni_atomic_sub64(nni_atomic_u64 *v, uint64_t bump)
 {
 	// Windows lacks a sub, so we add the negative.
 	InterlockedAddNoFence64(&v->v, (0ll - (LONGLONG) bump));
@@ -157,6 +167,18 @@ void
 nni_atomic_init64(nni_atomic_u64 *v)
 {
 	InterlockedExchange64(&v->v, 0);
+}
+
+void
+nni_atomic_inc64(nni_atomic_u64 *v)
+{
+	(void) InterlockedIncrementAcquire64(&v->v);
+}
+
+uint64_t
+nni_atomic_dec64_nv(nni_atomic_u64 *v)
+{
+	return ((uint64_t)(InterlockedDecrementRelease64(&v->v)));
 }
 
 static unsigned int __stdcall nni_plat_thr_main(void *arg)

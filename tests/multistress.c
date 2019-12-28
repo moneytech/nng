@@ -1,5 +1,5 @@
 //
-// Copyright 2018 Staysail Systems, Inc. <info@staysail.tech>
+// Copyright 2019 Staysail Systems, Inc. <info@staysail.tech>
 // Copyright 2018 Capitar IT Group BV <info@capitar.com>
 //
 // This software is supplied under the terms of the MIT License, a
@@ -8,29 +8,28 @@
 // found online at https://opensource.org/licenses/MIT.
 //
 
-#include "convey.h"
-#include "nng.h"
-
-#include "protocol/bus0/bus.h"
-#include "protocol/pair0/pair.h"
-#include "protocol/pair1/pair.h"
-#include "protocol/pipeline0/pull.h"
-#include "protocol/pipeline0/push.h"
-#include "protocol/pubsub0/pub.h"
-#include "protocol/pubsub0/sub.h"
-#include "protocol/reqrep0/rep.h"
-#include "protocol/reqrep0/req.h"
-#include "protocol/survey0/respond.h"
-#include "protocol/survey0/survey.h"
-#include "supplemental/util/platform.h"
-#include "transport/inproc/inproc.h"
-#include "transport/ipc/ipc.h"
-#include "transport/tcp/tcp.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
+#include <nng/nng.h>
+#include <nng/protocol/bus0/bus.h>
+#include <nng/protocol/pair0/pair.h>
+#include <nng/protocol/pair1/pair.h>
+#include <nng/protocol/pipeline0/pull.h>
+#include <nng/protocol/pipeline0/push.h>
+#include <nng/protocol/pubsub0/pub.h>
+#include <nng/protocol/pubsub0/sub.h>
+#include <nng/protocol/reqrep0/rep.h>
+#include <nng/protocol/reqrep0/req.h>
+#include <nng/protocol/survey0/respond.h>
+#include <nng/protocol/survey0/survey.h>
+#include <nng/supplemental/util/platform.h>
+#include <nng/transport/inproc/inproc.h>
+#include <nng/transport/ipc/ipc.h>
+#include <nng/transport/tcp/tcp.h>
+
+#include "convey.h"
 #include "stubs.h"
 
 #ifdef NDEBUG
@@ -48,20 +47,14 @@ const char *ipc_template    = "ipc:///tmp/nng_multistress_%d";
 nng_time    end_time;
 
 const char *templates[] = {
-#ifdef NNG_TRANSPORT_TCP
 	"tcp://127.0.0.1:%d",
-#endif
 // It would be nice to test TCPv6, but CI doesn't support it.
 // Outside of CI, it does seem to work though.
 #ifdef NNG_TEST_TCPV6
 	"tcp://[::1]:%d",
 #endif
-#ifdef NNG_TRANSPORT_INPROC
 	"inproc://nng_multistress_%d",
-#endif
-#ifdef NNG_TRANSPORT_IPC
 	"ipc:///tmp/nng_multistress_%d",
-#endif
 };
 
 #define NTEMPLATES (sizeof(templates) / sizeof(templates[0]))

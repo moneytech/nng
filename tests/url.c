@@ -10,12 +10,11 @@
 
 #include <string.h>
 
+#include <nng/nng.h>
+
 #include "convey.h"
 
-#include "nng.h"
-
 TestMain("URLs", {
-
 	nng_url *url;
 
 	Convey("http://www.google.com", {
@@ -224,6 +223,20 @@ TestMain("URLs", {
 		nng_url_free(url);
 	});
 
+	Convey("ws://*:12345/foobar", {
+		So(nng_url_parse(&url, "ws://*:12345/foobar") == 0);
+		So(url != NULL);
+		So(strcmp(url->u_scheme, "ws") == 0);
+		So(strcmp(url->u_host, ":12345") == 0);
+		So(strcmp(url->u_hostname, "") == 0);
+		So(strcmp(url->u_path, "/foobar") == 0);
+		So(strcmp(url->u_port, "12345") == 0);
+		So(url->u_query == NULL);
+		So(url->u_fragment == NULL);
+		So(url->u_userinfo == NULL);
+		nng_url_free(url);
+	});
+
 	Convey("ssh://user@host.example.com", {
 		So(nng_url_parse(&url, "ssh://user@host.example.com") == 0);
 		So(url != NULL);
@@ -316,5 +329,4 @@ TestMain("URLs", {
 		So(strcmp(url->u_path, "/\xc2\xa2_centsign") == 0);
 		nng_url_free(url);
 	});
-
 })

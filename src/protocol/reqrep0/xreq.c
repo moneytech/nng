@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "core/nng_impl.h"
-#include "protocol/reqrep0/req.h"
+#include "nng/protocol/reqrep0/req.h"
 
 // Request protocol.  The REQ protocol is the "request" side of a
 // request-reply pair.  This is useful for building RPC clients, for example.
@@ -289,10 +289,9 @@ static nni_proto_pipe_ops xreq0_pipe_ops = {
 	.pipe_stop  = xreq0_pipe_stop,
 };
 
-static nni_proto_option xreq0_sock_options[] = {
+static nni_option xreq0_sock_options[] = {
 	{
 	    .o_name = NNG_OPT_MAXTTL,
-	    .o_type = NNI_TYPE_INT32,
 	    .o_get  = xreq0_sock_get_maxttl,
 	    .o_set  = xreq0_sock_set_maxttl,
 	},
